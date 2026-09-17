@@ -31,7 +31,7 @@ To initiate a fault report, students and teachers provide a multi-modal set of i
 graph LR
 A["1 - COLLECT HAZARD REPORT<br>(IO_MANAGER)"] --> B["2 - AI ANALYSIS<br>(AI_MANAGER)"]
     B --> C["3 - APPLY BUSINESS RULES<br>(LOGIC_MANAGER)"]
-    C --> D["9 - STORE AND DISPATCH<br>(DATA_MANAGER)"]
+    C --> D["4 - STORE AND DISPATCH<br>(DATA_MANAGER)"]
 ```
 
 
