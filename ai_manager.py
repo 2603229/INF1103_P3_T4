@@ -45,3 +45,38 @@ def encode_image(image_path: Optional[str]) -> tuple[Optional[bytes], Optional[s
             return image_file.read(), mime_type
     except (IOError, OSError):
         return None, None
+
+def build_prompt(record: dict[str, Any]) -> str:
+    """Constructs a structured prompt for Gemini to analyze a campus safety hazard report.
+
+        Args:
+            record (dict[str, Any]): A dictionary containing hazard details, expected to include:
+                - 'reporter_name' (str)
+                - 'location' (str)
+                - 'impact_headcount' (int/str)
+                - 'asset_info' (str)
+                - 'description' (str)
+
+        Returns:
+            str: A formatted prompt instructing the model to evaluate the hazard and return 
+            strictly formatted JSON matching the required schema keys ('risk_summary', 
+            'category', 'severity', 'operational_impact', 'contextual_insights') without 
+            markdown code blocks.
+    """
+    prompt = f"""
+    Analyze the following campus safety hazard report and respond strictly in valid JSON format without markdown code blocks.
+    Required JSON keys:
+    - "risk_summary": A concise, bulleted risk summary text.
+    - "category": The category of the problem (e.g., Electrical, Plumbing, Structural, HVAC, IT/Equipment).
+    - "severity": Severity level (Low, Medium, High, Critical).
+    - "operational_impact": Assessment of impact (Minor, Moderate, Severe, Catastrophic).
+    - "contextual_insights": Explanations and safety insights.
+
+    Input Data:
+    Reporter Name: {record.get('reporter_name')}
+    Location: {record.get('location')}
+    Impact Headcount: {record.get('impact_headcount')}
+    Asset Information: {record.get('asset_info')}
+    Description: {record.get('description')}
+    """
+    return prompt.strip()
