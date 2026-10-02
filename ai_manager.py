@@ -214,3 +214,23 @@ def parse_response(raw: Any) -> Optional[dict[str, Any]]:
         # Catch and report any JSON decoding errors gracefully
         print(f"[AI Error] Failed to parse JSON response: {e}")
         return None
+
+def validate_response(data: dict[str, Any]) -> bool:
+    """
+    Validates that the parsed AI response dictionary contains all required schema keys 
+    and falls within expected categorical bounds.
+    """
+    # Define the mandatory keys required by the output schema
+    required_keys = ["risk_summary", "category", "severity", "operational_impact", "contextual_insights"]
+    
+    # Check that every required key is present in the response dictionary
+    for key in required_keys:
+        if key not in data:
+            return False
+            
+    # Validate that the 'severity' value matches one of the allowed categorical options
+    if data.get("severity") not in ["Low", "Medium", "High", "Critical"]:
+        return False
+        
+    # Return True if all schema and value validations pass successfully
+    return True
