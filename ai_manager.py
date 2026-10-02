@@ -8,10 +8,17 @@ Purpose: Connects to Google Gemini using the official google-genai SDK,
 import json
 import os
 import time
+import logging
 import concurrent.futures
 from typing import Any, Optional
 from google import genai
 from google.genai import types
+
+# Configure standard module-level logging for background notices and errors.
+# Using logging instead of print() ensures all terminal output rules 
+# remain strictly confined to the I/O Manager layer[cite: 8].
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger(__name__)
 
 def encode_image(image_path: Optional[str]) -> tuple[Optional[bytes], Optional[str]]:
     """
@@ -27,24 +34,28 @@ def encode_image(image_path: Optional[str]) -> tuple[Optional[bytes], Optional[s
                 - str: The detected MIME type ('image/png', 'image/webp', or defaults 
                     to 'image/jpeg'), or None if processing failed.
     """
-    if not image_path or image_path.strip().lower() in ["none", "", "n/a"]:
+    if image_path is None:
         return None, None
-        
-    if not os.path.exists(image_path):
+            
+    cleaned_path = str(image_path).strip()
+    if not cleaned_path or cleaned_path.lower() in ["none", "", "n/a"]:
         return None, None
-        
-    ext = os.path.splitext(image_path)[1].lower()
+            
+    if not os.path.exists(cleaned_path):
+        return None, None
+            
+    ext = os.path.splitext(cleaned_path)[1].lower()
     mime_type = "image/jpeg"
     if ext == ".png":
         mime_type = "image/png"
     elif ext == ".webp":
         mime_type = "image/webp"
-        
+            
     try:
-        with open(image_path, "rb") as image_file:
+        with open(cleaned_path, "rb") as image_file:
             return image_file.read(), mime_type
     except (IOError, OSError):
-        return None, None
+            return None, None
 
 def build_prompt(record: dict[str, Any]) -> str:
     """Constructs a structured prompt for Gemini to analyze a campus safety hazard report.
@@ -92,7 +103,7 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
     if not api_key:
         raise ValueError("GEMINI_API_KEY environment variable is not set. Please check your .env file.")
     
-    print("\n[AI Notice] Analyzing hazard report with Gemini AI...")
+    logger.info("Analyzing hazard report with Gemini AI...")
     
     try:
         # Initialize the official Google GenAI client and setup prompt contents
@@ -125,7 +136,7 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
                             if parsed and validate_response(parsed):
                                 return raw_text  # Return valid response text
                             else:
-                                print(f"\n[AI Notice] Invalid JSON or schema from {model_name}. Retrying...")
+                                logger.warning(f"Invalid JSON or schema from {model_name}. Retrying...")
                                 continue
                                 
                         except Exception as e:
@@ -133,12 +144,12 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
                             
                             # Handle rate limits / quota exhaustion (429) -> immediately switch model
                             if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                                print(f"\n[AI Notice] Quota limit reached on {model_name} (429). Switching model...")
+                                logger.warning(f"Quota limit reached on {model_name} (429). Switching model...")
                                 break
                                 
                             # Handle high-demand errors (503) -> wait 2 seconds and retry on the same model
                             if "503" in err_str and attempt < 1:
-                                print(f"\n[AI Notice] High demand on {model_name} (503). Retrying...")
+                                logger.warning(f"High demand on {model_name} (503). Retrying...")
                                 time.sleep(2)
                                 continue
                                 
@@ -156,13 +167,13 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
                 return res
 
     except concurrent.futures.TimeoutError:
-        print("\n[AI Notice] API call timed out after 300 seconds. Switching to intelligent offline assessment...")
+        logger.warning("API call timed out after 300 seconds. Switching to intelligent offline assessment...")
     except Exception as e:
-        print(f"\n[AI Notice] Network error ({e}). Switching to intelligent offline assessment modular fallback...")
+        logger.error(f"Network error ({e}). Switching to intelligent offline assessment modular fallback...")
 
     # Intelligent Offline Fallback: Generates a pre-formatted JSON response 
     # depending on whether visual evidence (image) was provided or not.
-    has_image = bool(visual_evidence_path and visual_evidence_path.strip().lower() not in ["none", "", "n/a"])
+    has_image = bool(visual_evidence_path and str(visual_evidence_path).strip().lower() not in ["none", "", "n/a"])
     if has_image:
         return json.dumps({
             "risk_summary": "- [Offline Assessment] Visible physical damage or exposed hazard detected in visual evidence\n- Immediate electrocution or physical safety hazard risk to occupants",
@@ -212,7 +223,7 @@ def parse_response(raw: Any) -> Optional[dict[str, Any]]:
         
     except json.JSONDecodeError as e:
         # Catch and report any JSON decoding errors gracefully
-        print(f"[AI Error] Failed to parse JSON response: {e}")
+        logger.error(f"Failed to parse JSON response: {e}")
         return None
 
 def validate_response(data: dict[str, Any]) -> bool:
