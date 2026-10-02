@@ -41,3 +41,10 @@ st.dataframe(
 )
 
 st.divider()
+
+# ---- Incident picker ----
+def format_incident_label(incident):
+    incident_id = incident.get("incident_id")
+    asset = incident.get("asset_info", "")
+    priority = incident.get("final_priority", "")
+    return f"{incident_id} — {asset} ({priority})"
