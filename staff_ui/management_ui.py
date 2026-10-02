@@ -61,3 +61,21 @@ incident = st.selectbox(
 # ---- Incident detail ----
 st.subheader(f"{incident['incident_id']} · {incident.get('asset_info', '')}")
 left, right = st.columns([3, 2])
+
+with left:
+    st.markdown(f"**Status:** {incident.get('status', '-')}")
+    st.markdown(
+        f"**Severity:** {incident.get('severity', '-')} · "
+        f"**Priority:** {incident.get('final_priority', '-')} "
+        f"(score {incident.get('priority_score', '-')})"
+    )
+    st.markdown(f"**Category:** {incident.get('category', '-')}")
+    st.markdown(f"**Location:** {incident.get('location', '-')}")
+    st.markdown(f"**Reported:** {incident.get('timestamp', '-')}")
+    st.markdown(f"**Reporter:** {incident.get('reporter_name', '-')} ({incident.get('reporter_contact', '-')})")
+    st.markdown(f"**People affected:** {incident.get('impact_headcount', '-')}")
+    st.markdown(f"**Duplicate:** {'Yes' if incident.get('is_duplicate') else 'No'}")
+    st.markdown("**Description**")
+    st.info(incident.get("description", "-"))
+    st.markdown("**AI risk summary**")
+    st.info(incident.get("risk_summary", "No risk summary available."))
