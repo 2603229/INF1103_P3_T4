@@ -179,3 +179,38 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
             "operational_impact": "Moderate",
             "contextual_insights": "Standard facility review recommended to ensure campus safety compliance."
         })
+
+def parse_response(raw: Any) -> Optional[dict[str, Any]]:
+    """
+    Extracts and parses JSON from raw API text strings, 
+    safely stripping markdown code wrappers (e.g., ```json ... ```).
+    """
+    # Return None immediately if the input is empty or None
+    if not raw:
+        return None
+        
+    try:
+        # Convert input to string and remove leading/trailing whitespace
+        cleaned = str(raw).strip()
+        
+        # Strip standard markdown code block formatting if present
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+            
+        # Parse the cleaned string as JSON
+        parsed_data = json.loads(cleaned.strip())
+        
+        # Ensure the parsed result is a dictionary before returning
+        if type(parsed_data) is dict:
+            return parsed_data  # type: ignore[reportUnknownVariableType]
+            
+        return None
+        
+    except json.JSONDecodeError as e:
+        # Catch and report any JSON decoding errors gracefully
+        print(f"[AI Error] Failed to parse JSON response: {e}")
+        return None
