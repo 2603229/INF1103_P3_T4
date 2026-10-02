@@ -39,3 +39,5 @@ st.dataframe(
     hide_index=False,
     width="stretch",
 )
+
+st.divider()
