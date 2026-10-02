@@ -79,3 +79,10 @@ with left:
     st.info(incident.get("description", "-"))
     st.markdown("**AI risk summary**")
     st.info(incident.get("risk_summary", "No risk summary available."))
+
+with right:
+    image_path = incident.get("visual_evidence")
+    if image_path and os.path.isfile(image_path):
+        st.image(image_path, caption="Visual evidence")
+    else:
+        st.caption(f"No image found at: {image_path or 'not provided'}")
