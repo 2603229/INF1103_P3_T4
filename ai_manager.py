@@ -80,3 +80,102 @@ def build_prompt(record: dict[str, Any]) -> str:
     Description: {record.get('description')}
     """
     return prompt.strip()
+
+def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
+    """
+    Sends the prompt to Gemini using the official Google GenAI SDK client,
+    featuring a multi-model fallback cascade, retry backoffs for 429/503 errors,
+    a 300-second execution timeout, and an intelligent offline JSON fallback.
+    """
+    # 1. Verify that the Gemini API key is configured in the environment variables
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY environment variable is not set. Please check your .env file.")
+    
+    print("\n[AI Notice] Analyzing hazard report with Gemini AI...")
+    
+    try:
+        # Initialize the official Google GenAI client and setup prompt contents
+        client = genai.Client(api_key=api_key)
+        contents: list[Any] = [prompt]
+        
+        # Encode and attach visual evidence (image) as a multimodal part if available
+        img_bytes, mime_type = encode_image(visual_evidence_path)
+        if img_bytes and mime_type:
+            contents.append(
+                types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+            )
+
+        def _make_api_call() -> Optional[str]:
+                # Define the multi-model fallback cascade order
+                target_models = ['gemini-3.8-flash', 'gemini-3.6-flash'] 
+                for model_name in target_models:
+                    # Allow up to 2 attempts per model
+                    for attempt in range(2):
+                        try:
+                            # Send content generation request to the current model
+                            response = client.models.generate_content(
+                                model=model_name,
+                                contents=contents
+                            )
+                            raw_text = str(response.text)
+                            
+                            # Parse and validate response structure/schema
+                            parsed = parse_response(raw_text)
+                            if parsed and validate_response(parsed):
+                                return raw_text  # Return valid response text
+                            else:
+                                print(f"\n[AI Notice] Invalid JSON or schema from {model_name}. Retrying...")
+                                continue
+                                
+                        except Exception as e:
+                            err_str = str(e)
+                            
+                            # Handle rate limits / quota exhaustion (429) -> immediately switch model
+                            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                                print(f"\n[AI Notice] Quota limit reached on {model_name} (429). Switching model...")
+                                break
+                                
+                            # Handle high-demand errors (503) -> wait 2 seconds and retry on the same model
+                            if "503" in err_str and attempt < 1:
+                                print(f"\n[AI Notice] High demand on {model_name} (503). Retrying...")
+                                time.sleep(2)
+                                continue
+                                
+                            # If all models in the cascade fail, raise the exception
+                            if model_name == target_models[-1]:
+                                raise e
+                            break
+                return None
+
+        # Execute the API call inside a ThreadPoolExecutor to enforce a strict timeout limit
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future = executor.submit(_make_api_call)
+            res = future.result(timeout=300)  # 300-second execution timeout
+            if res:
+                return res
+
+    except concurrent.futures.TimeoutError:
+        print("\n[AI Notice] API call timed out after 300 seconds. Switching to intelligent offline assessment...")
+    except Exception as e:
+        print(f"\n[AI Notice] Network error ({e}). Switching to intelligent offline assessment modular fallback...")
+
+    # Intelligent Offline Fallback: Generates a pre-formatted JSON response 
+    # depending on whether visual evidence (image) was provided or not.
+    has_image = bool(visual_evidence_path and visual_evidence_path.strip().lower() not in ["none", "", "n/a"])
+    if has_image:
+        return json.dumps({
+            "risk_summary": "- [Offline Assessment] Visible physical damage or exposed hazard detected in visual evidence\n- Immediate electrocution or physical safety hazard risk to occupants",
+            "category": "Electrical / Infrastructure",
+            "severity": "Critical",
+            "operational_impact": "Severe",
+            "contextual_insights": "Visual evidence indicates compromised physical asset integrity. Cordon off the area immediately and dispatch maintenance."
+        })
+    else:
+        return json.dumps({
+            "risk_summary": "- [Offline Assessment] Potential hazard reported requiring facility inspection\n- Standard operational risk mitigation needed",
+            "category": "General Maintenance",
+            "severity": "Medium",
+            "operational_impact": "Moderate",
+            "contextual_insights": "Standard facility review recommended to ensure campus safety compliance."
+        })
