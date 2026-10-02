@@ -48,3 +48,12 @@ def format_incident_label(incident):
     asset = incident.get("asset_info", "")
     priority = incident.get("final_priority", "")
     return f"{incident_id} — {asset} ({priority})"
+
+st.markdown("### Select an incident to view")
+
+incident = st.selectbox(
+    "Select an incident to view",
+    incidents,
+    format_func=format_incident_label,
+    label_visibility="collapsed",
+)
