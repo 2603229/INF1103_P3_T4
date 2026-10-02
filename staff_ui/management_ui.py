@@ -57,3 +57,7 @@ incident = st.selectbox(
     format_func=format_incident_label,
     label_visibility="collapsed",
 )
+
+# ---- Incident detail ----
+st.subheader(f"{incident['incident_id']} · {incident.get('asset_info', '')}")
+left, right = st.columns([3, 2])
