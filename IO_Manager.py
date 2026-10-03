@@ -129,7 +129,10 @@ def get_user_input() -> dict[str, Any]:
 
     # Compile validated fields into a structured dictionary record 
     record: dict[str, Any] = {
-        "reporter_name": reporter_name
+        "reporter_name": reporter_name,
+        "reporter_contact": reporter_contact,
+        "location": location,
+        "impact_headcount": impact
         }
     return record
         
