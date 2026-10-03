@@ -21,6 +21,14 @@ if not incidents:
     st.info("No incidents to show yet.")
     st.stop()
 
+def get_priority_score(i):
+    return i.get("priority_score") or 0
+
+# Highest priority first
+def get_priority_score(i):
+    return i.get("priority_score") or 0
+incidents = sorted(incidents, key=get_priority_score, reverse=True)
+
 # ---- Incident table ----
 st.subheader(f"Incidents ({len(incidents)})")
 st.dataframe(
