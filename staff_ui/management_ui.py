@@ -57,7 +57,8 @@ def format_incident_label(incident):
     incident_id = incident.get("incident_id")
     asset = incident.get("asset_info", "")
     priority = incident.get("final_priority", "")
-    return f"{incident_id} — {asset} ({priority})"
+    score = incident.get("priority_score", "-")
+    return f"{incident_id} — {asset} ({priority}, score {score})"
 
 st.markdown("### Select an incident to view")
 
