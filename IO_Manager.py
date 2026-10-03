@@ -1,6 +1,8 @@
 # Import module statements
 import re
 from typing import Any, Optional
+from collections import Counter
+from typing import Any
 
 # Display main menu
 def display_menu() -> str:
@@ -153,15 +155,56 @@ def get_user_input() -> dict[str, Any]:
         "description": description
         }
     return record
-        
+
+def view_all_reports(reports: list[dict[str, Any]]) -> None:
+    """Displays all submitted hazard reports in a structured summary format."""
+    print("\n==============================================")
+    print("           VIEW ALL HAZARD REPORTS            ")
+    print("==============================================")
+
+    # Check if there are any reports stored
+    if not reports:
+        print("No hazard reports submitted yet.")
+        print("==============================================")
+        return
+
+    print(f"Total Reports Found: {len(reports)}\n")
+
+    # Iterate and display each report with a clear card boundary
+    for idx, report in enumerate(reports, start=1):
+        print(f"--- Report #{idx} ---")
+        print(f"Reporter Name    : {report.get('reporter_name')}")
+        print(f"Contact Info     : {report.get('reporter_contact')}")
+        print(f"Location         : {report.get('location')}")
+        print(f"Affected People  : {report.get('impact_headcount')}")
+        print(f"Asset / Summary  : {report.get('asset_info')}")
+        print(f"Description      : {report.get('description')}")
+        print("-" * 30)
+
+    print("==============================================")
+
+
 # Test block: Add a function call to your script
 if __name__ == "__main__":
-    # Test the main menu
-    selected_option = display_menu()
-    print(f"\nYou selected option: {selected_option}")
+    # Master list storing all submitted records
+    hazard_reports: list[dict[str, Any]] = []
 
-    # Test gathering user input if option 1 was selected
-    if selected_option == "1":
-        user_data = get_user_input()
-        print("\nCaptured Record:")
-        print(user_data)
+    while True:
+        selected_option = display_menu()
+
+        if selected_option == "1":
+            user_data = get_user_input()
+            hazard_reports.append(user_data)
+            print("\n✅ Hazard report successfully submitted!")
+
+        elif selected_option == "2":
+            view_all_reports(hazard_reports)
+
+        elif selected_option == "8":
+            print("\nExiting Campus Safety Hazard Reporting System. Goodbye!")
+            break
+
+        else:
+            print(
+                f"\nInvalid Option: '{selected_option}'. Please select a valid menu option between 1 and 8."
+            )
