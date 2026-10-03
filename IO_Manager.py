@@ -111,6 +111,22 @@ def get_user_input() -> dict[str, Any]:
         if not location:
             print("Error: Location cannot be empty.")
 
+    #  PURPOSE:
+    #  Measures the potential reach/severity of a campus safety hazard by capturing 
+    #  the estimated number of people affected (e.g., aircon breakdown in a lecture 
+    #  hall affecting ~200 students vs. a broken desk socket affecting 1-2 people).
+    impact = 0
+    while True:
+        impact_input = input("Please enter an estimated number of people that will be affected: ").strip()
+        if impact_input.isdigit():
+            impact = int(impact_input)
+            if 1 <= impact <= 1000:
+                break
+            print("Error: Please enter a realistic headcount between 1 and 1000.")
+        else:
+            print("Error: Please enter a valid non-negative number.")
+
+
     # Compile validated fields into a structured dictionary record 
     record: dict[str, Any] = {
         "reporter_name": reporter_name
