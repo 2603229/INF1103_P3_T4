@@ -126,13 +126,31 @@ def get_user_input() -> dict[str, Any]:
         else:
             print("Error: Please enter a valid non-negative number.")
 
+    # Step 6: Validate Asset Info / Brief Hazard Summary (minimum 3 characters required)
+    asset_info = ""
+    while True:
+        asset_info = input("Enter asset or brief hazard summary (e.g., Aircon spoil, Window broken, Wet floor): ").strip()
+        if len(asset_info) >= 3:
+            break
+        print("Error: Please provide at least 3 characters (e.g., 'Wet floor').")
+            
+    # Step 7: Validate Detailed Description & Risk (minimum 15 characters required for contextual AI analysis)
+    description = ""
+    while True:
+        description = input("Enter elaboration on the risk/safety hazard (e.g., Water pooling near electrical outlet, high slip risk): ").strip()
+        if len(description) >= 15:
+            break
+        print("Error: Description is too brief. Please provide at least 15 characters elaborating on the hazard/risk.")
 
+    
     # Compile validated fields into a structured dictionary record 
     record: dict[str, Any] = {
         "reporter_name": reporter_name,
         "reporter_contact": reporter_contact,
         "location": location,
-        "impact_headcount": impact
+        "impact_headcount": impact,
+        "asset_info": asset_info,
+        "description": description
         }
     return record
         
