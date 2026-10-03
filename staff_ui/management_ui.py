@@ -77,6 +77,9 @@ with left:
     st.markdown(f"**Status:** {incident.get('status', '-')}")
     st.markdown(
         f"**Severity:** {incident.get('severity', '-')} · "
+        f"**Operational impact:** {incident.get('operational_impact', '-')}"
+    )
+    st.markdown(
         f"**Priority:** {incident.get('final_priority', '-')} "
         f"(score {incident.get('priority_score', '-')})"
     )
@@ -88,8 +91,18 @@ with left:
     st.markdown(f"**Duplicate:** {'Yes' if incident.get('is_duplicate') else 'No'}")
     st.markdown("**Description**")
     st.info(incident.get("description", "-"))
+    
+    # Risk summary uses "•" or "-" bullets on separate lines; render as a markdown list
     st.markdown("**AI risk summary**")
-    st.info(incident.get("risk_summary", "No risk summary available."))
+    risk_summary = incident.get("risk_summary")
+    bullets = []
+    if risk_summary not in EMPTY_VALUES:
+        bullets = [line.strip().lstrip("•-*").strip() for line in risk_summary.splitlines()]
+        bullets = [b for b in bullets if b]
+    st.info("\n".join(f"- {b}" for b in bullets) if bullets else "No risk summary available.")
+
+    st.markdown("**AI contextual insights**")
+    st.info(incident.get("contextual_insights") or "No insights available.")
 
 with right:
     image_path = incident.get("visual_evidence")
