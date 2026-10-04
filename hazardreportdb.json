@@ -6,5 +6,13 @@
         "impact_headcount": 50,
         "asset_info": "aircon leak",
         "description": "aircon leaking in room 2 level 3"
+    },
+    {
+        "reporter_name": "d koh",
+        "reporter_contact": "92849930",
+        "location": "Block E2 L3",
+        "impact_headcount": 40,
+        "asset_info": "aircon leak",
+        "description": "aircon leaking at block E2 Level 3 classroom"
     }
 ]

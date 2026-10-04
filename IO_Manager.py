@@ -6,7 +6,16 @@ from typing import Any, Optional
 from collections import Counter
 
 
-DB_FILE = "hazardreportdb.json"
+#DB_FILE = "hazardreportdb.json"
+
+
+# ERROR HANDLING for JSON file path
+# Use an absolute path based on the script's location using os.path.dirname(__file__):
+## With BASE_DIR: No matter where you launch the terminal from, 
+## DB_FILE will always point directly inside the folder where your script lives.
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(BASE_DIR, "hazardreportdb.json")
+
 
 # ==============================================================================
 # JSON DATABASE HELPER FUNCTIONS
