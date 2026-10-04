@@ -4,7 +4,6 @@ import json
 import os
 from typing import Any, Optional
 from collections import Counter
-from typing import Any
 
 
 DB_FILE = "hazardreportdb.json"
@@ -29,7 +28,14 @@ def load_reports() -> list[dict[str, Any]]:
         return []
     
 
-
+def save_reports(reports: list[dict[str, Any]]) -> None:
+    """Saves the list of hazard reports to the JSON database file."""
+    try:
+        with open(DB_FILE, "w", encoding="utf-8") as file:
+            json.dump(reports, file, indent=4)
+        print(f"Data successfully saved to {DB_FILE}")
+    except Exception as e:
+        print(f"Error saving data to {DB_FILE}: {e}")
 
 # Display main menu
 def display_menu() -> str:
@@ -215,7 +221,7 @@ def view_all_reports(reports: list[dict[str, Any]]) -> None:
     print("==============================================")
 
 
-# Test block: Add a function call to your script
+# Test block: To run the script directly and interact with the CLI menu for hazard reporting
 if __name__ == "__main__":
 
     # Load any existing reports from hazardreportdb.json upon startup
