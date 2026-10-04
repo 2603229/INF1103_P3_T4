@@ -11,8 +11,8 @@ from collections import Counter
 
 # ERROR HANDLING for JSON file path
 # Use an absolute path based on the script's location using os.path.dirname(__file__):
-## With BASE_DIR: No matter where you launch the terminal from, 
-## DB_FILE will always point directly inside the folder where your script lives.
+## With BASE_DIR: No matter where the terminal is launch from, DB_FILE will always point 
+## directly inside the folder where the script lives to ensure that it is accessing the write folder.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_FILE = os.path.join(BASE_DIR, "hazardreportdb.json")
 
