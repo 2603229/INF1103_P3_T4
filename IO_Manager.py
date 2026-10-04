@@ -1,8 +1,35 @@
 # Import module statements
 import re
+import json
+import os
 from typing import Any, Optional
 from collections import Counter
 from typing import Any
+
+
+DB_FILE = "hazardreportdb.json"
+
+# ==============================================================================
+# JSON DATABASE HELPER FUNCTIONS
+# ==============================================================================
+def load_reports() -> list[dict[str, Any]]:
+    """Loads reports from the JSON database file.
+
+    Returns an empty list if the file doesn't exist or is empty.
+    """
+    if not os.path.exists(DB_FILE):
+        return []
+
+    try:
+        with open(DB_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+            return data if isinstance(data, list) else []
+    except (json.JSONDecodeError, FileNotFoundError):
+        # File is empty or improperly formatted
+        return []
+    
+
+
 
 # Display main menu
 def display_menu() -> str:
@@ -28,6 +55,10 @@ def display_menu() -> str:
         if choice.isdigit() and 1 <= int(choice) <= 8:
             return choice
         print("[Error] Invalid input. Please enter a valid number between 1 and 8.")
+
+# ==============================================================================
+# OPTION 1: USER INPUT & SUBMISSION
+# ==============================================================================
 
 # It specifies that the function returns a dictionary (dict) with specific types for its keys and values:
 #   str (Key Type): All keys in the dictionary must be strings.
@@ -146,18 +177,18 @@ def get_user_input() -> dict[str, Any]:
 
     
     # Compile validated fields into a structured dictionary record 
-    record: dict[str, Any] = {
+    return {
         "reporter_name": reporter_name,
         "reporter_contact": reporter_contact,
         "location": location,
         "impact_headcount": impact,
         "asset_info": asset_info,
-        "description": description
-        }
-    return record
+        "description": description,
+    }
 
+# To view all submitted hazard reports
 def view_all_reports(reports: list[dict[str, Any]]) -> None:
-    """Displays all submitted hazard reports in a structured summary format."""
+    ## Displays all submitted hazard reports in a structured summary format.
     print("\n==============================================")
     print("           VIEW ALL HAZARD REPORTS            ")
     print("==============================================")
@@ -186,15 +217,21 @@ def view_all_reports(reports: list[dict[str, Any]]) -> None:
 
 # Test block: Add a function call to your script
 if __name__ == "__main__":
-    # Master list storing all submitted records
-    hazard_reports: list[dict[str, Any]] = []
+
+    # Load any existing reports from hazardreportdb.json upon startup
+    hazard_reports = load_reports()
+    #print(f"Loaded {len(hazard_reports)} existing report(s) from {DB_FILE}.")
 
     while True:
         selected_option = display_menu()
 
         if selected_option == "1":
+            # Collect user input for a new hazard report
             user_data = get_user_input()
             hazard_reports.append(user_data)
+            # Persist update directly to hazardreportdb.json
+            save_reports(hazard_reports)
+            # Print confirmation message after successful submission
             print("\n✅ Hazard report successfully submitted!")
 
         elif selected_option == "2":
