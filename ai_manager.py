@@ -124,10 +124,13 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
                     # Allow up to 2 attempts per model
                     for attempt in range(2):
                         try:
-                            # Send content generation request to the current model
+                            # Send content generation request to the current model with enforced JSON MIME type
                             response = client.models.generate_content(
                                 model=model_name,
-                                contents=contents
+                                contents=contents,
+                                config=types.GenerateContentConfig(
+                                    response_mime_type="application/json"
+                                )
                             )
                             raw_text = str(response.text)
                             
