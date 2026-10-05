@@ -96,7 +96,7 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
     """
     Sends the prompt to Gemini using the official Google GenAI SDK client,
     featuring a multi-model fallback cascade, retry backoffs for 429/503 errors,
-    a 300-second execution timeout, and an intelligent offline JSON fallback.
+    and a 300-second execution timeout.
     """
     # 1. Verify that the Gemini API key is configured in the environment variables
     api_key = os.environ.get("GEMINI_API_KEY")
