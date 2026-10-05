@@ -120,6 +120,7 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
         def _make_api_call() -> Optional[str]:
                 # Define the multi-model fallback cascade order
                 target_models = ['gemini-3.8-flash', 'gemini-3.6-flash'] 
+                
                 for model_name in target_models:
                     # Allow up to 2 attempts per model
                     for attempt in range(2):
