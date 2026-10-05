@@ -174,26 +174,6 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
     except Exception as e:
         logger.error(f"Network error ({e}). Switching to intelligent offline assessment modular fallback...")
 
-    # Intelligent Offline Fallback: Generates a pre-formatted JSON response 
-    # depending on whether visual evidence (image) was provided or not.
-    has_image = bool(visual_evidence_path and str(visual_evidence_path).strip().lower() not in ["none", "", "n/a"])
-    if has_image:
-        return json.dumps({
-            "risk_summary": "- [Offline Assessment] Visible physical damage or exposed hazard detected in visual evidence\n- Immediate electrocution or physical safety hazard risk to occupants",
-            "category": "Electrical / Infrastructure",
-            "severity": "Critical",
-            "operational_impact": "Severe",
-            "contextual_insights": "Visual evidence indicates compromised physical asset integrity. Cordon off the area immediately and dispatch maintenance."
-        })
-    else:
-        return json.dumps({
-            "risk_summary": "- [Offline Assessment] Potential hazard reported requiring facility inspection\n- Standard operational risk mitigation needed",
-            "category": "General Maintenance",
-            "severity": "Medium",
-            "operational_impact": "Moderate",
-            "contextual_insights": "Standard facility review recommended to ensure campus safety compliance."
-        })
-
 def parse_response(raw: Any) -> Optional[dict[str, Any]]:
     """
     Extracts and parses JSON from raw API text strings, 
