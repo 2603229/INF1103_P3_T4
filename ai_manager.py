@@ -15,8 +15,8 @@ from google import genai
 from google.genai import types
 
 # Configure standard module-level logging for background notices and errors.
-# Using logging instead of print() ensures all terminal output rules 
-# remain strictly confined to the I/O Manager layer[cite: 8].
+# Using logging instead of print() keeps terminal output controlled
+# and avoids direct console output from this module.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
