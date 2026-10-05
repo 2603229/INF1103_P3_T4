@@ -170,9 +170,20 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
                 return res
 
     except concurrent.futures.TimeoutError:
-        logger.warning("API call timed out after 300 seconds. Switching to intelligent offline assessment...")
+        logger.warning("API call timed out after 300 seconds.")
+        return json.dumps({
+            "error": "AI processing timed out"
+        })
+
     except Exception as e:
-        logger.error(f"Network error ({e}). Switching to intelligent offline assessment modular fallback...")
+        logger.error(f"AI API error: {e}")
+        return json.dumps({
+            "error": "AI processing unavailable"
+        })
+
+    return json.dumps({
+        "error": "AI processing failed"
+    })
 
 def parse_response(raw: Any) -> Optional[dict[str, Any]]:
     """
