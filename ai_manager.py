@@ -231,20 +231,37 @@ def parse_response(raw: Any) -> Optional[dict[str, Any]]:
 
 def validate_response(data: dict[str, Any]) -> bool:
     """
-    Validates that the parsed AI response dictionary contains all required schema keys 
-    and falls within expected categorical bounds.
+    Validates that the AI response contains the required schema,
+    uses the correct data types, and contains valid categorical values.
     """
-    # Define the mandatory keys required by the output schema
-    required_keys = ["risk_summary", "category", "severity", "operational_impact", "contextual_insights"]
-    
-    # Check that every required key is present in the response dictionary
-    for key in required_keys:
-        if key not in data:
-            return False
-            
-    # Validate that the 'severity' value matches one of the allowed categorical options
-    if data.get("severity") not in ["Low", "Medium", "High", "Critical"]:
+    required_keys = [
+        "risk_summary",
+        "category",
+        "severity",
+        "operational_impact",
+        "contextual_insights"
+    ]
+
+    # Check that all required keys are present
+    if not all(key in data for key in required_keys):
         return False
-        
-    # Return True if all schema and value validations pass successfully
+
+    # Check that all required fields are strings
+    for key in required_keys:
+        if not isinstance(data[key], str):
+            return False
+
+    # Check allowed severity values
+    if data["severity"] not in ["Low", "Medium", "High", "Critical"]:
+        return False
+
+    # Check allowed operational impact values
+    if data["operational_impact"] not in [
+        "Minor",
+        "Moderate",
+        "Severe",
+        "Catastrophic"
+    ]:
+        return False
+
     return True
