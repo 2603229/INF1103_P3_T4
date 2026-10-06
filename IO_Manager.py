@@ -1,4 +1,5 @@
 # Import module statements
+from ast import If
 from builtins import dict
 import re
 import json
@@ -243,8 +244,10 @@ def view_frequent_hazards(
         return
 
     # Extract all asset_info strings (converted to lowercase for uniform grouping)
+    ## Accesses the value stored under the key "asset_info" inside each report dictionary.
+    ## If a report dictionary is missing the "asset_info" key altogether, .get() safely returns "Unknown" as a default value instead of throwing a KeyError crash.
     hazard_counts = Counter(
-        report.get("asset_info", "Unknown").strip().title()
+        report.get("asset_info", "Unknown")
         for report in reports
     )
 
