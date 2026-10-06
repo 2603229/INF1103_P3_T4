@@ -247,7 +247,9 @@ def view_frequent_hazards(
     ## Accesses the value stored under the key "asset_info" inside each report dictionary.
     ## If a report dictionary is missing the "asset_info" key altogether, .get() safely returns "Unknown" as a default value instead of throwing a KeyError crash.
     hazard_counts = Counter(
-        report.get("asset_info", "Unknown")
+        # remove leading spaces, trailing spaces, and convert to title case for consistent display
+        report.get("asset_info", "Unknown").strip().title()
+
         for report in reports
     )
 
