@@ -1,4 +1,5 @@
 # Import module statements
+from builtins import dict
 import re
 import json
 import os
@@ -230,6 +231,25 @@ def view_all_reports(reports: list[dict[str, Any]]) -> None:
     print("==============================================")
 
 
+# View Top 5 most frequent hazards
+def view_frequent_hazards(
+    reports: list[dict[str, Any]]
+) -> None:
+    # Groups reports by asset/hazard summary and displays the top N most frequent hazards.
+
+    if not reports:
+        print("No hazard reports submitted yet.")
+        print("==============================================")
+        return
+
+    # Extract all asset_info strings (converted to lowercase for uniform grouping)
+    hazard_counts = Counter(
+        report.get("asset_info", "Unknown").strip().title()
+        for report in reports
+    )
+
+
+
 # Test block: To run the script directly and interact with the CLI menu for hazard reporting
 if __name__ == "__main__":
 
@@ -251,6 +271,9 @@ if __name__ == "__main__":
 
         elif selected_option == "2":
             view_all_reports(hazard_reports)
+
+        elif selected_option == "3":
+            view_frequent_hazards(hazard_reports)
 
         elif selected_option == "8":
             print("\nExiting Campus Safety Hazard Reporting System. Goodbye!")
