@@ -263,14 +263,10 @@ def view_frequent_hazards(
         print(f"{rank:<6} | {hazard:<28} | {count:<10}")
 
 
-
-
-# Test block: To run the script directly and interact with the CLI menu for hazard reporting
-if __name__ == "__main__":
-
+def main() -> None:
+    """Main execution loop for the Campus Safety Hazard Reporting System."""
     # Load any existing reports from hazardreportdb.json upon startup
     hazard_reports = load_reports()
-    #print(f"Loaded {len(hazard_reports)} existing report(s) from {DB_FILE}.")
 
     while True:
         selected_option = display_menu()
@@ -296,5 +292,13 @@ if __name__ == "__main__":
 
         else:
             print(
-                f"\nInvalid Option: '{selected_option}'. Please select a valid menu option between 1 and 8."
+                f"\nInvalid Option: '{selected_option}'. Please select a valid"
+                " menu option between 1 and 5."
             )
+
+
+# Standard Python entry point
+## Import Safeguard: Keeping if __name__ == "__main__": main() at the very bottom ensures that if you import this script into another file 
+## (such as a testing module or web app), the CLI loop won't automatically execute on import.
+if __name__ == "__main__":
+    main()
