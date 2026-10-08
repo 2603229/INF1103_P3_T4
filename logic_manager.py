@@ -100,43 +100,88 @@ def process_record(record: dict[str, Any]) -> dict[str, Any]:
     return handle_ai_failure(record)
 
 
-def calculate_score(record):
-    severity = record.get("severity", "low")
-    safety_risk = record.get("safety_risk", "low")
-    operational_impact = record.get("operational_impact", "low")
+def score(record: dict[str, Any]) -> int:
+    """
+    Produces a numeric priority score from AI-enriched hazard fields.
+
+    Higher scores indicate higher priority.
+    """
+
+    severity = str(
+        record.get("severity", "low")
+    ).strip().lower()
+
+    safety_risk = str(
+        record.get("safety_risk", "low")
+    ).strip().lower()
+
+    operational_impact = str(
+        record.get("operational_impact", "low")
+    ).strip().lower()
+
     historical_frequency = record.get("historical_frequency", 0)
 
-    score = 0
-
-    if severity == "high":
-        score += 4
+    # Calculate severity score
+    if severity == "critical":
+        severity_score = 5
+    elif severity == "high":
+        severity_score = 4
     elif severity == "medium":
-        score += 2
+        severity_score = 2
     else:
-        score += 1
+        severity_score = 1
 
+    # Calculate safety risk score
     if safety_risk == "high":
-        score += 4
+        safety_score = 4
     elif safety_risk == "medium":
-        score += 2
+        safety_score = 2
     else:
-        score += 1
+        safety_score = 1
 
-    if operational_impact == "high":
-        score += 3
+    # Calculate operational impact score
+    if operational_impact == "severe":
+        operational_score = 4
+    elif operational_impact == "high":
+        operational_score = 3
     elif operational_impact == "medium":
-        score += 2
+        operational_score = 2
     else:
-        score += 1
+        operational_score = 1
 
+    # Calculate historical frequency score
     if historical_frequency >= 5:
-        score += 3
+        frequency_score = 3
     elif historical_frequency >= 2:
-        score += 2
+        frequency_score = 2
     elif historical_frequency >= 1:
-        score += 1
+        frequency_score = 1
+    else:
+        frequency_score = 0
 
-    return score
+    # Final calculation
+    priority_score = (
+        severity_score
+        + safety_score
+        + operational_score
+        + frequency_score
+    )
+
+    # Show calculation in terminal
+    print("\n--- PRIORITY SCORE CALCULATION ---")
+    print(f"Severity: {severity} → +{severity_score}")
+    print(f"Safety Risk: {safety_risk} → +{safety_score}")
+    print(f"Operational Impact: {operational_impact} → +{operational_score}")
+    print(f"Historical Frequency: {historical_frequency} → +{frequency_score}")
+    print("----------------------------------")
+    print(
+        f"Priority Score = {severity_score} + "
+        f"{safety_score} + "
+        f"{operational_score} + "
+        f"{frequency_score} = {priority_score}"
+    )
+
+    return priority_score
 
 def route(record: dict[str, Any]) -> str:
     """
@@ -149,3 +194,29 @@ def route(record: dict[str, Any]) -> str:
         return "Urgent Emergency Dispatch"
 
     return "Standard Maintenance Queue"
+
+def check_duplicate(
+    new_record: dict[str, Any],
+    existing_records: list[dict[str, Any]]
+) -> str:
+    """
+    Checks whether a new report potentially duplicates
+    an unresolved existing report.
+    """
+
+    for r in existing_records:
+
+        loc_match = (
+            str(new_record.get("location", "")).strip().lower()
+            == str(r.get("location", "")).strip().lower()
+        )
+
+        asset_match = (
+            str(new_record.get("asset_info", "")).strip().lower()
+            == str(r.get("asset_info", "")).strip().lower()
+        )
+
+        if loc_match and asset_match and r.get("status") != "Resolved":
+            return f"Potential Duplicate of {r.get('incident_id')}"
+
+    return "Unique"
