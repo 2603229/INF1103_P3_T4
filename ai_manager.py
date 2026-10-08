@@ -76,11 +76,15 @@ def build_prompt(record: dict[str, Any]) -> str:
     """
     prompt = f"""
     Analyze the following campus safety hazard report and respond strictly in valid JSON format without markdown code blocks.
+
+    Return exactly these five keys:
+    "risk_summary", "category", "severity", "operational_impact", "contextual_insights"
+
     Required JSON keys:
     - "risk_summary": A concise, bulleted risk summary text.
-    - "category": The category of the problem (e.g., Electrical, Plumbing, Structural, HVAC, IT/Equipment).
-    - "severity": Severity level (Low, Medium, High, Critical).
-    - "operational_impact": Assessment of impact (Minor, Moderate, Severe, Catastrophic).
+    - "category": Must be exactly one of: Electrical, Plumbing, Structural, HVAC, IT/Equipment.
+    - "severity": Must be exactly one of: Low, Medium, High, Critical.
+    - "operational_impact": Must be exactly one of: Minor, Moderate, Severe, Catastrophic.
     - "contextual_insights": Explanations and safety insights.
 
     Input Data:
@@ -211,7 +215,7 @@ def parse_response(raw: Any) -> Optional[dict[str, Any]]:
         parsed_data = json.loads(cleaned.strip())
         
         # Ensure the parsed result is a dictionary before returning
-        if type(parsed_data) is dict:
+        if isinstance(parsed_data, dict):
             return parsed_data  # type: ignore[reportUnknownVariableType]
             
         return None
@@ -243,8 +247,23 @@ def validate_response(data: dict[str, Any]) -> bool:
         if not isinstance(data[key], str):
             return False
 
+    # Check allowed category values
+    if data["category"] not in [
+        "Electrical",
+        "Plumbing",
+        "Structural",
+        "HVAC",
+        "IT/Equipment"
+    ]:
+        return False
+
     # Check allowed severity values
-    if data["severity"] not in ["Low", "Medium", "High", "Critical"]:
+    if data["severity"] not in [
+        "Low",
+        "Medium",
+        "High",
+        "Critical"
+    ]:
         return False
 
     # Check allowed operational impact values
