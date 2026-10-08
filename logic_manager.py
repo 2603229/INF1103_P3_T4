@@ -137,3 +137,15 @@ def calculate_score(record):
         score += 1
 
     return score
+
+def route(record: dict[str, Any]) -> str:
+    """
+    Determines the operational dispatch queue based on severity.
+    """
+
+    severity = str(record.get("severity", "Low"))
+
+    if severity in ["Critical", "High"]:
+        return "Urgent Emergency Dispatch"
+
+    return "Standard Maintenance Queue"
