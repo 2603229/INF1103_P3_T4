@@ -292,7 +292,35 @@ def select_image_via_dialog() -> str:
     root.withdraw()
     root.attributes("-topmost", True)  # Bring window to front above terminal
             
+    # Open OS File Selection Dialog (Filters for common image extensions)
+    file_path = filedialog.askopenfilename(
+        title="Select Hazard Image",
+        filetypes=[
+            ("Image Files", "*.png *.jpg *.jpeg *.gif *.bmp *.webp"),
+            ("All Files", "*.*"),
+        ],
+    )
 
+    # Destroy tkinter instance after file selection
+    root.destroy()
+
+    ## If the user closes/cancels the file picker window without selecting a file, it prints a message and returns an empty string "".
+    if not file_path:
+        print("ℹNo image selected. Continuing without image.")
+        return ""
+
+    # Copy selected file into the local 'uploads/' folder
+    filename = os.path.basename(file_path)
+    destination = os.path.join(upload_dir, filename)
+
+    try:
+        shutil.copy(file_path, destination)
+        print(f"Image attached and saved to: uploads/{filename}")
+        return f"uploads/{filename}"
+    except Exception as e:
+        print(f"Error copying image file: {e}")
+        return ""
+    
 def main() -> None:
     """Main execution loop for the Campus Safety Hazard Reporting System."""
     # Load any existing reports from hazardreportdb.json upon startup
