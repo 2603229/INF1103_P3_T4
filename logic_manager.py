@@ -4,7 +4,7 @@ from typing import Any
 
 from ai_manager import build_prompt, call_api, parse_response
 
-logger = logging.getLogger(_name_)
+logger = logging.getLogger(__name__)
 
 
 def handle_ai_failure(record: dict[str, Any]) -> dict[str, Any]:
