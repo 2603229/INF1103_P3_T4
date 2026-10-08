@@ -111,7 +111,7 @@ def save(record: Record) -> bool:
 
 
 # ---------------------------------------------------------------------------
-# Query  / update
+# Query  / update / delete
 # ---------------------------------------------------------------------------
 
 def query(filter_fn: Callable[[Record], bool]) -> list[Record]:
@@ -135,6 +135,7 @@ def matches_keyword(keyword: str) -> Callable[[Record], bool]:
 
     return _filter
 
+
 def update_incident_status(incident_id: str, new_status: str = "Resolved") -> bool:
     """Sets the status of one incident (e.g. 'Pending Review' -> 'Resolved')."""
     records = load()
@@ -145,3 +146,11 @@ def update_incident_status(incident_id: str, new_status: str = "Resolved") -> bo
     return False
 
 
+def delete_incident_by_id(incident_id: str) -> bool:
+    """Deletes one incident by ID (case-insensitive). False if not found or save failed."""
+    records = load()
+    target = incident_id.strip().upper()
+    remaining = [r for r in records if str(r.get("incident_id", "")).strip().upper() != target]
+    if len(remaining) == len(records):
+        return False
+    return save_all(remaining)
