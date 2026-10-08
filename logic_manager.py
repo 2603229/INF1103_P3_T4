@@ -306,3 +306,26 @@ def check_duplicate(
             return f"Potential Duplicate of {r.get('incident_id')}"
 
     return "Unique"
+
+def sort_incidents_by_severity(
+    records: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """
+    Sorts incidents by severity:
+    Critical -> High -> Medium -> Low.
+    """
+
+    order = {
+        "Critical": 0,
+        "High": 1,
+        "Medium": 2,
+        "Low": 3
+    }
+
+    return sorted(
+        records,
+        key=lambda x: order.get(
+            str(x.get("severity", "Low")),
+            4
+        )
+    )
