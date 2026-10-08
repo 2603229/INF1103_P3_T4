@@ -122,10 +122,10 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
             )
 
         def _make_api_call() -> Optional[str]:
-                # Define the multi-model fallback cascade order
-                target_models = ['gemini-3.8-flash', 'gemini-3.6-flash'] 
+            # Define the multi-model fallback cascade order
+            target_models = ['gemini-3.8-flash', 'gemini-3.6-flash'] 
                 
-                for model_name in target_models:
+            for model_name in target_models:
                     # Allow up to 2 attempts per model
                     for attempt in range(2):
                         try:
@@ -165,7 +165,7 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
                             if model_name == target_models[-1]:
                                 raise e
                             break
-                return None
+            return None
 
         # Execute the API call inside a ThreadPoolExecutor to enforce a strict timeout limit
         with concurrent.futures.ThreadPoolExecutor() as executor:
