@@ -256,3 +256,21 @@ def _build_columns(records: list[dict[str, Any]]) -> list[tuple[str, str]]:
     for key in sorted(present - known):
         columns.append((key.replace("_", " ").title(), key))
     return columns
+
+
+def _cell_value(value: Any) -> Any:
+    """
+    Makes a stored value safe to write into a CSV cell. Text starting with
+    = + - @ (or a tab / carriage return) gets a leading apostrophe so that
+    Excel shows it as text instead of running it as a formula.
+    """
+    if value is None:
+        return ""
+    if isinstance(value, list):
+        value = "; ".join(str(v) for v in value)
+    if isinstance(value, (int, float)):
+        return value
+    text = str(value)
+    if text.startswith(("=", "+", "-", "@", "\t", "\r")):
+        return "'" + text
+    return text
