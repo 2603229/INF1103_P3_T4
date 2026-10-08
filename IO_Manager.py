@@ -54,7 +54,7 @@ def save_reports(reports: list[dict[str, Any]]) -> None:
 def display_menu() -> str:
     """
     Displays the main interactive CLI menu, strips whitespace, 
-    and strictly loops until the user enters a valid option number between 1 and 8.
+    and strictly loops until the user enters a valid option number between 1 and 4.
     """
     print("\n==============================================")
     print("     CAMPUS SAFETY HAZARD REPORTING SYSTEM      ")
@@ -62,15 +62,14 @@ def display_menu() -> str:
     print("1. Submit New Hazard Report")
     print("2. View All Logged Incidents")
     print("3. View Top 5 Most Frequent Hazards")
-    print("4. Export Incidents to Excel Report")
-    print("5. Exit")
+    print("4. Exit")
 
-    # Enforce strict numeric range validation loop (1 to 5)
+    # Enforce strict numeric range validation loop (1 to 4)
     while True:
-        choice = input("Select an option (1-5): ").strip()
-        if choice.isdigit() and 1 <= int(choice) <= 8:
+        choice = input("Select an option (1-4): ").strip()
+        if choice.isdigit() and 1 <= int(choice) <= 4:
             return choice
-        print("[Error] Invalid input. Please enter a valid number between 1 and 5.")
+        print("[Error] Invalid input. Please enter a valid number between 1 and 4.")
 
 # ==============================================================================
 # OPTION 1: USER INPUT & SUBMISSION
@@ -344,14 +343,14 @@ def main() -> None:
         elif selected_option == "3":
             view_frequent_hazards(hazard_reports)
 
-        elif selected_option == "5":
+        elif selected_option == "4":
             print("\nExiting Campus Safety Hazard Reporting System. Goodbye!")
             break
 
         else:
             print(
                 f"\nInvalid Option: '{selected_option}'. Please select a valid"
-                " menu option between 1 and 5."
+                " menu option between 1 and 4."
             )
 
 
