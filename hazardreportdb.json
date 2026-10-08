@@ -14,5 +14,13 @@
         "impact_headcount": 40,
         "asset_info": "aircon leak",
         "description": "aircon leaking at block E2 Level 3 classroom"
+    },
+    {
+        "reporter_name": "d koh",
+        "reporter_contact": "87566885",
+        "location": "sit",
+        "impact_headcount": 40,
+        "asset_info": "window handle broken",
+        "description": "unable to close and open window"
     }
 ]

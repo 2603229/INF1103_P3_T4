@@ -59,7 +59,7 @@ def display_menu() -> str:
     print("==============================================")
     print("1. Submit New Hazard Report")
     print("2. View All Logged Incidents")
-    print("3. Query Incidents by Location or Asset")
+    print("3. View Top 5 Most Frequent Hazards")
     print("4. Export Incidents to Excel Report")
     print("5. Clear All Logged Records")
     print("6. Mark Incident as Resolved")
@@ -236,7 +236,12 @@ def view_all_reports(reports: list[dict[str, Any]]) -> None:
 def view_frequent_hazards(
     reports: list[dict[str, Any]], top_n: int = 5
 ) -> None:
-    """Groups reports by asset/hazard summary and displays the top N most frequent hazards."""
+    # Groups reports by asset/hazard summary and displays the top N most frequent hazards.
+
+    # Format in clean header for the top hazards summary
+    print("\n==============================================")
+    print(f"       TOP {top_n} MOST FREQUENT HAZARD REPORTS       ")
+    print("==============================================")
 
     if not reports:
         print("No hazard reports submitted yet.")
