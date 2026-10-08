@@ -4,11 +4,13 @@ from builtins import dict
 import re
 import json
 import os
+import base64
 from typing import Any, Optional
 from collections import Counter
 
-
-#DB_FILE = "hazardreportdb.json"
+import shutil
+import tkinter as tk
+from tkinter import filedialog
 
 
 # ERROR HANDLING for JSON file path
@@ -189,7 +191,15 @@ def get_user_input() -> dict[str, Any]:
             break
         print("Error: Description is too brief. Please provide at least 15 characters elaborating on the hazard/risk.")
 
-    
+    # Step 8: Handle optional image attachment (Base64 encoding for JSON embedding)
+    print("\nWould you like to attach an image of the hazard?")
+    attach_choice = input("Attach image? (y/n): ").strip().lower()
+
+    image_path = ""
+    if attach_choice in ["y", "yes"]:
+        image_path = select_image_via_dialog()
+
+
     # Compile validated fields into a structured dictionary record 
     return {
         "reporter_name": reporter_name,
@@ -198,6 +208,7 @@ def get_user_input() -> dict[str, Any]:
         "impact_headcount": impact,
         "asset_info": asset_info,
         "description": description,
+        "image_patch": image_path  
     }
 
 # To view all submitted hazard reports
@@ -262,6 +273,19 @@ def view_frequent_hazards(
     for rank, (hazard, count) in enumerate(top_hazards, start=1):
         print(f"{rank:<6} | {hazard:<28} | {count:<10}")
 
+# OPTIONAL : allows the user to upload an image of the hazard
+def select_image_via_dialog() -> str:
+    """Opens a native OS file picker window allowing the user to select an image.
+
+    Copies the chosen image to the project's 'uploads/' folder and returns the
+    relative path string for JSON storage.
+    """
+    # Create the uploads folder inside the project directory if it doesn't exist
+    upload_dir = os.path.join(BASE_DIR, "uploads")
+    os.makedirs(upload_dir, exist_ok=True)
+
+   
+            
 
 def main() -> None:
     """Main execution loop for the Campus Safety Hazard Reporting System."""
