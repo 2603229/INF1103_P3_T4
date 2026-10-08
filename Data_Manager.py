@@ -274,3 +274,38 @@ def _cell_value(value: Any) -> Any:
     if text.startswith(("=", "+", "-", "@", "\t", "\r")):
         return "'" + text
     return text
+
+
+def export_incidents_to_csv(filename: Optional[str] = None) -> Optional[str]:
+    """
+    Exports all records to a .csv file that opens correctly in Excel (UTF-8
+    with a byte-order mark, so bullets and accents display properly).
+    Returns the file path on success, or None if there is nothing to export or
+    the export failed (logged, e.g. the file is open in Excel and locked).
+    """
+    records = load()
+    if not records:
+        return None
+ 
+    path = filename or os.path.join(get_data_dir(), EXPORT_FILENAME)
+    tmp_path = path + ".tmp"
+    columns = _build_columns(records)
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        with open(tmp_path, "w", encoding="utf-8-sig", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow([header for header, _ in columns])
+            for r in records:
+                writer.writerow(
+                    [_cell_value(r.get(key, DEFAULT_STATUS if key == "status" else "")) for _, key in columns]
+                )
+        os.replace(tmp_path, path)
+        return path
+    except (OSError, csv.Error) as err:
+        logger.error("CSV export failed: %s", err)
+        try:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except OSError:
+            pass
+        return None
