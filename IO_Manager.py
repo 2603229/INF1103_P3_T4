@@ -284,7 +284,13 @@ def select_image_via_dialog() -> str:
     upload_dir = os.path.join(BASE_DIR, "uploads")
     os.makedirs(upload_dir, exist_ok=True)
 
-   
+    print("\nOpening file picker window... Please select an image file.")
+
+    # Initialize tkinter root window and hide the main Tk background window
+    ## It uses Python's tkinter.filedialog module to pop up a native OS file selection window (Windows Explorer or macOS Finder) over your terminal.
+    root = tk.Tk()
+    root.withdraw()
+    root.attributes("-topmost", True)  # Bring window to front above terminal
             
 
 def main() -> None:
