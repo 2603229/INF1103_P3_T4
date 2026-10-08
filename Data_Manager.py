@@ -108,3 +108,16 @@ def save(record: Record) -> bool:
     records = load()
     records.append(record)
     return save_all(records)
+
+
+
+def query(filter_fn: Callable[[Record], bool]) -> list[Record]:
+    """Returns all stored records for which filter_fn(record) is True."""
+    matches: list[Record] = []
+    for r in load():
+        try:
+            if filter_fn(r):
+                matches.append(r)
+        except Exception as err:  # noqa: BLE001 - a bad filter must not crash the app
+            logger.error("Filter function failed on a record: %s", err)
+    return matches
