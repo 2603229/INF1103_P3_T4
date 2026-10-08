@@ -183,6 +183,63 @@ def score(record: dict[str, Any]) -> int:
 
     return priority_score
 
+def evaluate(record: dict[str, Any]) -> dict[str, Any]:
+    """
+    Runs business rules against an AI-enriched hazard record.
+
+    Returns:
+        dict[str, Any]: The business decision for the hazard.
+    """
+
+    severity = str(
+        record.get("severity", "low")
+    ).strip().lower()
+
+    operational_impact = str(
+        record.get("operational_impact", "low")
+    ).strip().lower()
+
+    priority_score = score(record)
+
+    # Multi-condition business rule:
+    # Critical severity AND severe operational impact
+    # require immediate emergency response.
+    if severity == "critical" and operational_impact == "severe":
+        priority = "Critical"
+        action = "Immediate Emergency Dispatch"
+        reason = (
+            "Critical severity combined with severe operational impact."
+        )
+
+    elif severity == "high" and operational_impact in ["high", "severe"]:
+        priority = "High"
+        action = "Urgent Maintenance"
+        reason = (
+            "High severity combined with significant operational impact."
+        )
+
+    elif priority_score >= 8:
+        priority = "High"
+        action = "Priority Maintenance"
+        reason = (
+            "Priority score reached the high-risk threshold."
+        )
+
+    else:
+        priority = "Normal"
+        action = "Standard Maintenance"
+        reason = (
+            "Hazard does not meet the criteria for urgent escalation."
+        )
+
+    return {
+        "priority": priority,
+        "score": priority_score,
+        "action": action,
+        "reason": reason,
+        "route": route(record)
+    }
+
 def route(record: dict[str, Any]) -> str:
     """
     Determines the operational dispatch queue based on severity.
