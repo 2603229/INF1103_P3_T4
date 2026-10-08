@@ -110,6 +110,9 @@ def save(record: Record) -> bool:
     return save_all(records)
 
 
+# ---------------------------------------------------------------------------
+# Query  
+# ---------------------------------------------------------------------------
 
 def query(filter_fn: Callable[[Record], bool]) -> list[Record]:
     """Returns all stored records for which filter_fn(record) is True."""
@@ -121,3 +124,16 @@ def query(filter_fn: Callable[[Record], bool]) -> list[Record]:
         except Exception as err:  # noqa: BLE001 - a bad filter must not crash the app
             logger.error("Filter function failed on a record: %s", err)
     return matches
+
+
+def matches_keyword(keyword: str) -> Callable[[Record], bool]:
+    """Builds a filter_fn: case-insensitive keyword in location or asset."""
+    needle = keyword.strip().lower()
+
+    def _filter(r: Record) -> bool:
+        return needle in str(r.get("location", "")).lower() or needle in str(r.get("asset_info", "")).lower()
+
+    return _filter
+
+
+
