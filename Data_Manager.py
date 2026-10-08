@@ -210,3 +210,49 @@ def clear_database() -> bool:
     except OSError as err:
         logger.error("Could not clear database: %s", err)
         return False
+
+
+# ---------------------------------------------------------------------------
+# CSV export
+# ---------------------------------------------------------------------------
+ 
+# Known fields, in the order they should appear. A column is only created when
+# at least one record has that field, and any other field found in the records
+# is appended at the end, so nothing is silently dropped from the export.
+KNOWN_COLUMNS: list[tuple[str, str]] = [
+    ("Incident ID", "incident_id"),
+    ("Timestamp", "timestamp"),
+    ("Reporter Name", "reporter_name"),
+    ("Contact", "reporter_contact"),
+    ("Location", "location"),
+    ("Asset", "asset_info"),
+    ("Headcount", "impact_headcount"),
+    ("Category", "category"),
+    ("AI Severity Score", "severity_score"),
+    ("Severity", "severity"),
+    ("Operational Impact", "operational_impact"),
+    ("Priority Score", "priority_score"),
+    ("Priority Queue", "final_priority"),
+    ("Escalation Reason", "escalation_reason"),
+    ("Duplicate Flag", "is_duplicate"),
+    ("Status", "status"),
+    ("Description", "description"),
+    ("Risk Summary", "risk_summary"),
+    ("Risk Factors", "risk_factors"),
+    ("Recommended Action", "recommended_action"),
+    ("Contextual Insights", "contextual_insights"),
+    ("Visual Evidence", "visual_evidence"),
+]
+ALWAYS_COLUMNS = {"incident_id", "status"}
+ 
+ 
+def _build_columns(records: list[dict[str, Any]]) -> list[tuple[str, str]]:
+    """Works out which (header, field) columns the export needs for these records."""
+    present: set[str] = set()
+    for r in records:
+        present.update(r.keys())
+    columns = [(h, k) for h, k in KNOWN_COLUMNS if k in present or k in ALWAYS_COLUMNS]
+    known = {k for _, k in KNOWN_COLUMNS}
+    for key in sorted(present - known):
+        columns.append((key.replace("_", " ").title(), key))
+    return columns
