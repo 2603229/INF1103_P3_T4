@@ -14,9 +14,8 @@ from typing import Any, Optional
 from google import genai
 from google.genai import types
 
-# Configure standard module-level logging for background notices and errors.
-# Using logging instead of print() keeps terminal output controlled
-# and avoids direct console output from this module.
+# Configure logging for status messages and errors.
+# Logging is used instead of print() to keep output consistent and controllable.
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger(__name__)
 
@@ -150,24 +149,24 @@ def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
                         except Exception as e:
                             err_str = str(e)
                             
-                            # Handle rate limits / quota exhaustion (429) -> immediately switch model
+                            # Switch to the next model when the current model is rate-limited or quota-exhausted
                             if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
                                 logger.warning(f"Quota limit reached on {model_name} (429). Switching model...")
                                 break
                                 
-                            # Handle high-demand errors (503) -> wait 2 seconds and retry on the same model
+                            # Retry the same model after a 2-second delay when the service is temporarily unavailable (503).
                             if "503" in err_str and attempt < 1:
                                 logger.warning(f"High demand on {model_name} (503). Retrying...")
                                 time.sleep(2)
                                 continue
                                 
-                            # If all models in the cascade fail, raise the exception
+                            # Raise the exception if the final model cannot complete the request.
                             if model_name == target_models[-1]:
                                 raise e
                             break
             return None
 
-        # Execute the API call inside a ThreadPoolExecutor to enforce a strict timeout limit
+        # Run the API call in a separate thread so a timeout can be enforced
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future = executor.submit(_make_api_call)
             res = future.result(timeout=300)  # 300-second execution timeout
@@ -203,7 +202,7 @@ def parse_response(raw: Any) -> Optional[dict[str, Any]]:
         # Convert input to string and remove leading/trailing whitespace
         cleaned = str(raw).strip()
         
-        # Strip standard markdown code block formatting if present
+        # Remove optional Markdown code-block wrappers before parsing JSON
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
         if cleaned.startswith("```"):
@@ -247,7 +246,7 @@ def validate_response(data: dict[str, Any]) -> bool:
         if not isinstance(data[key], str):
             return False
 
-    # Check allowed category values
+    # Reject categories outside the project's required classification list
     if data["category"] not in [
         "Electrical",
         "Plumbing",
@@ -257,7 +256,7 @@ def validate_response(data: dict[str, Any]) -> bool:
     ]:
         return False
 
-    # Check allowed severity values
+   # Reject values outside the project's required severity levels
     if data["severity"] not in [
         "Low",
         "Medium",
@@ -266,7 +265,7 @@ def validate_response(data: dict[str, Any]) -> bool:
     ]:
         return False
 
-    # Check allowed operational impact values
+    # Reject values outside the project's required operational impact levels
     if data["operational_impact"] not in [
         "Minor",
         "Moderate",
