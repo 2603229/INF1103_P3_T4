@@ -234,9 +234,9 @@ def view_all_reports(reports: list[dict[str, Any]]) -> None:
 
 # View Top 5 most frequent hazards
 def view_frequent_hazards(
-    reports: list[dict[str, Any]]
+    reports: list[dict[str, Any]], top_n: int = 5
 ) -> None:
-    # Groups reports by asset/hazard summary and displays the top N most frequent hazards.
+    """Groups reports by asset/hazard summary and displays the top N most frequent hazards."""
 
     if not reports:
         print("No hazard reports submitted yet.")
@@ -244,14 +244,22 @@ def view_frequent_hazards(
         return
 
     # Extract all asset_info strings (converted to lowercase for uniform grouping)
-    ## Accesses the value stored under the key "asset_info" inside each report dictionary.
-    ## If a report dictionary is missing the "asset_info" key altogether, .get() safely returns "Unknown" as a default value instead of throwing a KeyError crash.
     hazard_counts = Counter(
-        # remove leading spaces, trailing spaces, and convert to title case for consistent display
         report.get("asset_info", "Unknown").strip().title()
-
         for report in reports
     )
+
+    # Get the top N most common hazards
+    top_hazards = hazard_counts.most_common(top_n)
+
+    print(
+        f"{'Rank':<6} | {'Hazard / Asset Summary':<28} | {'Frequency':<10}"
+    )
+    print("-" * 50)
+
+    for rank, (hazard, count) in enumerate(top_hazards, start=1):
+        print(f"{rank:<6} | {hazard:<28} | {count:<10}")
+
 
 
 
