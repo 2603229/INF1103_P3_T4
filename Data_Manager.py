@@ -178,7 +178,7 @@ def query(filter_fn: Callable[[dict[str, Any]], bool]) -> list[dict[str, Any]]:
  
  
 # ---------------------------------------------------------------------------
-# Update / delete 
+# Update / delete / clear
 # ---------------------------------------------------------------------------
  
 def update_incident_status(incident_id: str, new_status: str = "Resolved") -> bool:
@@ -199,3 +199,14 @@ def delete_incident_by_id(incident_id: str) -> bool:
     if len(remaining) == len(records):
         return False
     return save(remaining)
+
+
+def clear_database() -> bool:
+    """Permanently deletes the database file."""
+    try:
+        if os.path.exists(get_db_path()):
+            os.remove(get_db_path())
+        return True
+    except OSError as err:
+        logger.error("Could not clear database: %s", err)
+        return False
