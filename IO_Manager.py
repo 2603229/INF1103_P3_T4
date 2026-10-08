@@ -61,17 +61,14 @@ def display_menu() -> str:
     print("2. View All Logged Incidents")
     print("3. View Top 5 Most Frequent Hazards")
     print("4. Export Incidents to Excel Report")
-    print("5. Clear All Logged Records")
-    print("6. Mark Incident as Resolved")
-    print("7. Delete Specific Incident Record")
-    print("8. Exit")
+    print("5. Exit")
 
-    # Enforce strict numeric range validation loop (1 to 8)
+    # Enforce strict numeric range validation loop (1 to 5)
     while True:
-        choice = input("Select an option (1-8): ").strip()
+        choice = input("Select an option (1-5): ").strip()
         if choice.isdigit() and 1 <= int(choice) <= 8:
             return choice
-        print("[Error] Invalid input. Please enter a valid number between 1 and 8.")
+        print("[Error] Invalid input. Please enter a valid number between 1 and 5.")
 
 # ==============================================================================
 # OPTION 1: USER INPUT & SUBMISSION
@@ -293,7 +290,7 @@ if __name__ == "__main__":
         elif selected_option == "3":
             view_frequent_hazards(hazard_reports)
 
-        elif selected_option == "8":
+        elif selected_option == "5":
             print("\nExiting Campus Safety Hazard Reporting System. Goodbye!")
             break
 
