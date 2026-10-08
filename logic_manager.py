@@ -272,9 +272,11 @@ def route(record: dict[str, Any]) -> str:
     Determines the operational dispatch queue based on severity.
     """
 
-    severity = str(record.get("severity", "Low"))
+    severity = str(
+        record.get("severity", "low")
+    ).strip().lower()
 
-    if severity in ["Critical", "High"]:
+    if severity in ["critical", "high"]:
         return "Urgent Emergency Dispatch"
 
     return "Standard Maintenance Queue"
