@@ -25,7 +25,7 @@ from typing import Any, Callable, Optional
  
 logger = logging.getLogger(__name__)
  
-DB_FILENAME = "incidents_database.json"
+DB_FILENAME = "hazardreportdb.json"
 EXPORT_FILENAME = "safety_report.csv"
 DEFAULT_STATUS = "Pending Review"
  
