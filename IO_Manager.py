@@ -116,11 +116,13 @@ def get_user_input() -> dict[str, Any]:
         if not reporter_name:
             print("Error: Reporter name cannot be empty.")
         elif not re.match(name_pattern, reporter_name):
-            print("Error: Please enter a valid name (letters and spaces only, no numbers).")
+            print("Error: Please enter a valid name "
+                  "(letters, spaces, apostrophes, periods, and hyphens only)."
+)
         else:
             break
 
-    # Step 2: Validate Institutional Contact (SIT email domain or 8-11 digit phone number)
+    # Step 2: Validate Institutional Contact (SIT email domain or valid 8-digit phone number)
     reporter_contact = ""
 
     ## Restricts the username strictly to letters and numbers (such as john123@sit.singaporetech.edu.sg)
@@ -190,7 +192,9 @@ def get_user_input() -> dict[str, Any]:
             break
         print("Error: Description is too brief. Please provide at least 15 characters elaborating on the hazard/risk.")
 
-    # Step 8: Handle optional image attachment (Base64 encoding for JSON embedding)
+    # Step 8: Handle optional image attachment
+    # Copy the selected image to the uploads/ directory.
+    # Store its relative file path instead of embedding Base64 data in JSON.
     print("\nWould you like to attach an image of the hazard?")
     attach_choice = input("Attach image? (y/n): ").strip().lower()
 
@@ -305,7 +309,7 @@ def select_image_via_dialog() -> str:
 
     ## If the user closes/cancels the file picker window without selecting a file, it prints a message and returns an empty string "".
     if not file_path:
-        print("ℹNo image selected. Continuing without image.")
+        print("[Info] No image selected. Continuing without image.")
         return ""
 
     # Copy selected file into the local 'uploads/' folder
