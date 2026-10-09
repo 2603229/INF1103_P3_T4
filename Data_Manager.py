@@ -309,4 +309,3 @@ def export_incidents_to_csv(filename: Optional[str] = None) -> Optional[str]:
         except OSError:
             pass
         return None
-    
