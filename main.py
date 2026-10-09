@@ -1,34 +1,32 @@
 
 """
-Module Name: main.py
+INF1103 Team 4
+Campus Safety Hazard Reporting System
 
-Purpose:
-Main application controller for the Campus Safety Hazard Reporting System.
+MAIN APPLICATION INTEGRATION
 
-Integration flow:
-1. I/O Manager collects and validates user input.
-2. AI Manager analyses the hazard report.
-3. Logic Manager evaluates risk, priority and duplicates.
-4. Data Manager saves and retrieves incident records.
-5. I/O Manager displays results to the user.
+Workflow:
+1. I/O Manager collects hazard information.
+2. AI Manager analyses the report.
+3. Logic Manager calculates priority and routing.
+4. Data Manager saves the incident.
+5. AI assessment is saved separately in ai_assessments.json.
 
-This application follows procedural programming principles.
+All functions follow procedural programming principles.
 """
 
 import os
+import json
 import logging
+from datetime import datetime
 from typing import Any
-import subprocess 
-import sys 
-
 
 from dotenv import load_dotenv
 
-# Load API key and other environment variables
 load_dotenv()
 
 # ============================================================
-# IMPORT TEAMMATES' MODULES
+# IMPORT TEAM MODULES
 # ============================================================
 
 import IO_Manager
@@ -44,13 +42,10 @@ from logic_manager import (
     check_duplicate,
     sort_incidents_by_severity,
 )
-subprocess.Popen([ 
-    sys.executable, "-m", "streamlit", "run", "staff_ui/management_ui.py" 
-])
 
 
 # ============================================================
-# LOGGING CONFIGURATION
+# CONFIGURATION
 # ============================================================
 
 logging.basicConfig(
@@ -60,18 +55,22 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+AI_DATABASE = os.path.join(
+    BASE_DIR,
+    "ai_assessments.json"
+)
+
 
 # ============================================================
-# HELPER FUNCTIONS
+# IMAGE PATH INTEGRATION
 # ============================================================
 
 def prepare_image_path(record: dict[str, Any]) -> None:
     """
-    Converts the I/O Manager's image_patch field into the
-    visual_evidence_path field expected by the Logic Manager
-    and AI Manager.
-
-    The original image_patch field is preserved.
+    Converts the I/O Manager's image_patch field into
+    visual_evidence_path for AI processing.
     """
 
     image_path = (
@@ -85,7 +84,7 @@ def prepare_image_path(record: dict[str, Any]) -> None:
 
         if not os.path.isabs(image_path):
             image_path = os.path.join(
-                os.path.dirname(os.path.abspath(__file__)),
+                BASE_DIR,
                 image_path
             )
 
@@ -95,11 +94,158 @@ def prepare_image_path(record: dict[str, Any]) -> None:
         record["visual_evidence_path"] = ""
 
 
-def display_incident_result(record: dict[str, Any]) -> None:
-    """
-    Displays the final result after successful submission.
+# ============================================================
+# SAVE AI ASSESSMENT INTO SEPARATE JSON FILE
+# ============================================================
 
-    All user-facing output is delegated to the I/O Manager.
+def save_ai_assessment(
+    record: dict[str, Any],
+    ai_result: dict[str, Any],
+    assessment_source: str
+) -> bool:
+    """
+    Saves AI assessment into ai_assessments.json.
+
+    Each entry is linked to the original incident
+    using its incident_id.
+
+    Existing assessments are preserved.
+    """
+
+    assessments = []
+
+    # Load existing AI assessment records
+    if os.path.exists(AI_DATABASE):
+
+        try:
+            with open(
+                AI_DATABASE,
+                "r",
+                encoding="utf-8"
+            ) as file:
+
+                assessments = json.load(file)
+
+            if not isinstance(assessments, list):
+                raise ValueError(
+                    "AI assessment database must contain a list."
+                )
+
+        except (
+            json.JSONDecodeError,
+            OSError,
+            ValueError
+        ) as error:
+
+            logger.error(
+                "Unable to read AI database: %s",
+                error
+            )
+
+            return False
+
+    # Create AI assessment record
+    assessment = {
+        "incident_id": record.get("incident_id"),
+        "timestamp": record.get(
+            "timestamp",
+            datetime.now().strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+        ),
+        "reporter_name": record.get("reporter_name"),
+        "location": record.get("location"),
+        "asset_info": record.get("asset_info"),
+        "description": record.get("description"),
+        "assessment_source": assessment_source,
+        "risk_summary": ai_result.get("risk_summary"),
+        "category": ai_result.get("category"),
+        "severity": ai_result.get("severity"),
+        "operational_impact": ai_result.get(
+            "operational_impact"
+        ),
+        "contextual_insights": ai_result.get(
+            "contextual_insights"
+        ),
+        "historical_frequency": record.get(
+            "historical_frequency"
+        ),
+        "priority_score": record.get("priority_score"),
+        "final_priority": record.get("final_priority"),
+        "recommended_action": record.get(
+            "recommended_action"
+        ),
+        "escalation_reason": record.get(
+            "escalation_reason"
+        ),
+        "assigned_route": record.get("assigned_route"),
+        "is_duplicate": record.get("is_duplicate")
+    }
+
+    # Prevent duplicate assessment entries for same ID
+    incident_id = assessment["incident_id"]
+
+    for existing in assessments:
+        if (
+            isinstance(existing, dict)
+            and existing.get("incident_id") == incident_id
+        ):
+            logger.error(
+                "AI assessment already exists for %s",
+                incident_id
+            )
+            return False
+
+    assessments.append(assessment)
+
+    # Write using a temporary file
+    temp_path = AI_DATABASE + ".tmp"
+
+    try:
+        with open(
+            temp_path,
+            "w",
+            encoding="utf-8"
+        ) as file:
+
+            json.dump(
+                assessments,
+                file,
+                indent=4,
+                ensure_ascii=False
+            )
+
+        os.replace(
+            temp_path,
+            AI_DATABASE
+        )
+
+        return True
+
+    except (
+        OSError,
+        TypeError,
+        ValueError
+    ) as error:
+
+        logger.error(
+            "Failed to save AI assessment: %s",
+            error
+        )
+
+        return False
+
+
+# ============================================================
+# DISPLAY FINAL INCIDENT RESULT
+# ============================================================
+
+def display_incident_result(
+    record: dict[str, Any]
+) -> None:
+    """
+    Displays the completed hazard report
+    and its AI/logic assessment.
     """
 
     IO_Manager.view_all_reports([record])
@@ -129,6 +275,16 @@ def display_incident_result(record: dict[str, Any]) -> None:
     print(
         "Risk Summary:",
         record.get("risk_summary", "N/A")
+    )
+
+    print(
+        "Contextual Insights:",
+        record.get("contextual_insights", "N/A")
+    )
+
+    print(
+        "Assessment Source:",
+        record.get("assessment_source", "N/A")
     )
 
     print(
@@ -170,9 +326,9 @@ def display_incident_result(record: dict[str, Any]) -> None:
 
 def submit_hazard_report() -> None:
     """
-    Coordinates the complete hazard reporting workflow.
+    Full integration pipeline:
 
-    I/O -> AI -> Logic -> Data -> I/O
+    I/O -> AI -> Logic -> Data -> AI JSON
     """
 
     print("\n==============================================")
@@ -180,7 +336,7 @@ def submit_hazard_report() -> None:
     print("==============================================")
 
     # --------------------------------------------------------
-    # STEP 1: COLLECT USER INPUT
+    # STEP 1: GET USER INPUT
     # --------------------------------------------------------
 
     try:
@@ -191,29 +347,31 @@ def submit_hazard_report() -> None:
         return
 
     if not isinstance(record, dict):
-        print("[Error] Invalid report data received.")
+        print("[Error] Invalid report information.")
         return
 
     # --------------------------------------------------------
-    # STEP 2: PREPARE IMAGE EVIDENCE
+    # STEP 2: PREPARE IMAGE
     # --------------------------------------------------------
 
     prepare_image_path(record)
 
     # --------------------------------------------------------
-    # STEP 3: LOAD EXISTING INCIDENT RECORDS
+    # STEP 3: LOAD EXISTING INCIDENTS
     # --------------------------------------------------------
 
     existing_records = Data_Manager.load()
 
     if Data_Manager.last_load_warning:
+
         print(
             "[Warning]",
             Data_Manager.last_load_warning
         )
 
-        # Do not overwrite an unreadable database.
-        if os.path.exists(Data_Manager.get_db_path()):
+        if os.path.exists(
+            Data_Manager.get_db_path()
+        ):
             print(
                 "[Error] Submission stopped to protect "
                 "the existing database."
@@ -221,23 +379,28 @@ def submit_hazard_report() -> None:
             return
 
     # --------------------------------------------------------
-    # STEP 4: SEND REPORT THROUGH AI MANAGER
+    # STEP 4: AI ASSESSMENT
     # --------------------------------------------------------
 
     print("\n[Processing] Analysing hazard report...")
 
+    assessment_source = "Gemini AI"
+
     try:
         ai_result = process_record(record)
 
-        if not isinstance(ai_result, dict):
-            raise ValueError("Invalid AI result format")
+        if (
+            not isinstance(ai_result, dict)
+            or not validate_response(ai_result)
+        ):
 
-        if not validate_response(ai_result):
             logger.warning(
-                "AI result failed validation. "
-                "Using offline fallback."
+                "AI result invalid. Applying offline fallback."
             )
+
             ai_result = handle_ai_failure(record)
+
+            assessment_source = "Offline Fallback"
 
     except Exception as error:
 
@@ -248,8 +411,19 @@ def submit_hazard_report() -> None:
 
         ai_result = handle_ai_failure(record)
 
-    # Merge assessment fields into original report
+        assessment_source = "Offline Fallback"
+
+    # process_record() may already return an offline fallback.
+    # The fallback contains an offline assessment marker.
+    if "[Offline Assessment]" in str(
+        ai_result.get("risk_summary", "")
+    ):
+        assessment_source = "Offline Fallback"
+
+    # Merge AI fields into incident record
     record.update(ai_result)
+
+    record["assessment_source"] = assessment_source
 
     # --------------------------------------------------------
     # STEP 5: HISTORICAL FREQUENCY
@@ -263,7 +437,7 @@ def submit_hazard_report() -> None:
     )
 
     # --------------------------------------------------------
-    # STEP 6: DUPLICATE DETECTION
+    # STEP 6: DUPLICATE CHECK
     # --------------------------------------------------------
 
     record["is_duplicate"] = check_duplicate(
@@ -272,7 +446,7 @@ def submit_hazard_report() -> None:
     )
 
     # --------------------------------------------------------
-    # STEP 7: PRIORITY EVALUATION
+    # STEP 7: LOGIC EVALUATION
     # --------------------------------------------------------
 
     try:
@@ -307,7 +481,7 @@ def submit_hazard_report() -> None:
     record["status"] = "Pending Review"
 
     # --------------------------------------------------------
-    # STEP 9: DISPLAY ASSESSMENT SUMMARY
+    # STEP 9: DISPLAY PRE-SUBMISSION SUMMARY
     # --------------------------------------------------------
 
     print("\n========== PRE-SUBMISSION SUMMARY ==========")
@@ -325,6 +499,11 @@ def submit_hazard_report() -> None:
     print(
         "Severity:",
         record.get("severity", "N/A")
+    )
+
+    print(
+        "AI Assessment Source:",
+        assessment_source
     )
 
     print(
@@ -350,9 +529,14 @@ def submit_hazard_report() -> None:
 
     while True:
 
-        confirmation = input(
-            "\nConfirm hazard report submission? (y/n): "
-        ).strip().lower()
+        try:
+            confirmation = input(
+                "\nConfirm hazard report submission? (y/n): "
+            ).strip().lower()
+
+        except (KeyboardInterrupt, EOFError):
+            print("\n[Notice] Submission cancelled.")
+            return
 
         if confirmation in ("y", "yes", "n", "no"):
             break
@@ -366,10 +550,11 @@ def submit_hazard_report() -> None:
         print(
             "\n[Notice] Hazard report submission cancelled."
         )
+
         return
 
     # --------------------------------------------------------
-    # STEP 11: SAVE THROUGH DATA MANAGER
+    # STEP 11: SAVE INCIDENT INTO MAIN DATABASE
     # --------------------------------------------------------
 
     try:
@@ -378,7 +563,7 @@ def submit_hazard_report() -> None:
     except Exception as error:
 
         logger.error(
-            "Database save failed: %s",
+            "Incident database save failed: %s",
             error
         )
 
@@ -389,15 +574,43 @@ def submit_hazard_report() -> None:
         print(
             "\n[Error] Failed to save hazard report."
         )
+
         return
 
-    # The Data Manager assigns incident ID and timestamp.
     print(
         "\n[Success] Hazard report saved successfully!"
     )
 
+    print(
+        "Incident ID:",
+        record.get("incident_id", "N/A")
+    )
+
     # --------------------------------------------------------
-    # STEP 12: DISPLAY FINAL RESULT
+    # STEP 12: SAVE AI OUTPUT INTO NEW JSON FILE
+    # --------------------------------------------------------
+
+    ai_saved = save_ai_assessment(
+        record,
+        ai_result,
+        assessment_source
+    )
+
+    if ai_saved:
+
+        print(
+            "[Success] AI assessment saved to ai_assessments.json"
+        )
+
+    else:
+
+        print(
+            "[Warning] Incident saved, but AI assessment "
+            "could not be saved separately."
+        )
+
+    # --------------------------------------------------------
+    # STEP 13: DISPLAY FINAL RESULT
     # --------------------------------------------------------
 
     display_incident_result(record)
@@ -409,13 +622,13 @@ def submit_hazard_report() -> None:
 
 def view_all_incidents() -> None:
     """
-    Retrieves incidents from the Data Manager,
-    sorts them by severity, and displays them.
+    Loads and displays all incident reports.
     """
 
     records = Data_Manager.load()
 
     if Data_Manager.last_load_warning:
+
         print(
             "[Warning]",
             Data_Manager.last_load_warning
@@ -426,6 +639,7 @@ def view_all_incidents() -> None:
         print(
             "\n[Notice] No hazard reports found."
         )
+
         return
 
     sorted_records = sort_incidents_by_severity(
@@ -438,18 +652,19 @@ def view_all_incidents() -> None:
 
 
 # ============================================================
-# OPTION 3: VIEW TOP 5 FREQUENT HAZARDS
+# OPTION 3: VIEW TOP FIVE HAZARDS
 # ============================================================
 
 def view_top_five_hazards() -> None:
     """
-    Retrieves stored incident records and displays
-    the five most frequently reported hazard types.
+    Displays the five most frequently
+    reported hazard types.
     """
 
     records = Data_Manager.load()
 
     if Data_Manager.last_load_warning:
+
         print(
             "[Warning]",
             Data_Manager.last_load_warning
@@ -462,15 +677,12 @@ def view_top_five_hazards() -> None:
 
 
 # ============================================================
-# MAIN APPLICATION MENU
+# MAIN APPLICATION
 # ============================================================
 
 def main() -> None:
     """
-    Main application loop.
-
-    Coordinates the four menu options provided
-    by the team's current IO_Manager.py.
+    Main menu and application controller.
     """
 
     print("\n==============================================")
@@ -484,8 +696,6 @@ def main() -> None:
     while True:
 
         try:
-
-            # Display validated menu from I/O Manager
             choice = IO_Manager.display_menu()
 
             # OPTION 1: SUBMIT REPORT
@@ -493,12 +703,12 @@ def main() -> None:
 
                 submit_hazard_report()
 
-            # OPTION 2: VIEW INCIDENTS
+            # OPTION 2: VIEW ALL REPORTS
             elif choice == "2":
 
                 view_all_incidents()
 
-            # OPTION 3: TOP FIVE HAZARDS
+            # OPTION 3: VIEW TOP FIVE HAZARDS
             elif choice == "3":
 
                 view_top_five_hazards()
@@ -510,6 +720,7 @@ def main() -> None:
                     "\nExiting Campus Safety Hazard "
                     "Reporting System. Goodbye!"
                 )
+
                 break
 
             else:
@@ -521,8 +732,9 @@ def main() -> None:
         except KeyboardInterrupt:
 
             print(
-                "\n\n[Notice] Application interrupted by user."
+                "\n[Notice] Application interrupted."
             )
+
             break
 
         except EOFError:
@@ -530,6 +742,7 @@ def main() -> None:
             print(
                 "\n[Notice] Input stream closed."
             )
+
             break
 
         except Exception as error:
@@ -540,8 +753,7 @@ def main() -> None:
             )
 
             print(
-                "\n[Error] An unexpected error occurred. "
-                "Please review the error log."
+                "\n[Error] An unexpected error occurred."
             )
 
 
