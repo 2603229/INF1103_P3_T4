@@ -559,11 +559,11 @@ def main() -> None:
     Main application controller.
     """
 
-    subprocess.Popen(
+    streamlit_proc = subprocess.Popen(
     [sys.executable, "-m", "streamlit", "run", "management_ui.py"],
     stdout=subprocess.DEVNULL,
     stderr=subprocess.DEVNULL,
-    )
+)
 
     print("\n==============================================")
     print("   CAMPUS SAFETY HAZARD REPORTING SYSTEM")
@@ -598,6 +598,8 @@ def main() -> None:
                     "\nExiting Campus Safety Hazard "
                     "Reporting System. Goodbye!"
                 )
+                streamlit_proc.terminate()
+                streamlit_proc.wait()
 
                 break
 
