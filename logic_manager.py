@@ -302,7 +302,7 @@ def check_duplicate(
             == str(r.get("asset_info", "")).strip().lower()
         )
 
-        if loc_match and asset_match and r.get("status") != "Resolved":
+        if loc_match and asset_match and r.get("status") not in ("Resolved", "Closed"):
             return f"Potential Duplicate of {r.get('incident_id')}"
 
     return "Unique"
