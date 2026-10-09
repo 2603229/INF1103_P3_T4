@@ -1,4 +1,3 @@
-
 """
 INF1103 Team 4
 Campus Safety Hazard Reporting System
@@ -9,13 +8,16 @@ Workflow:
 1. IO_Manager collects user input.
 2. ai_manager analyses the hazard report.
 3. logic_manager calculates priority and routing.
-4. Data_Manager saves the incident and AI assessment.
+4. Data_Manager saves ONE complete record (input + AI assessment
+   + decision) into hazardreportdb.json.
 
 All JSON file operations are handled by Data_Manager.py.
 """
 
 import os
 import logging
+import subprocess 
+import sys 
 from typing import Any
 
 from dotenv import load_dotenv
@@ -50,6 +52,19 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# The only fields taken from the AI result. Copying just these
+# stops an unexpected AI key from overwriting reporter data
+# such as "location" or "incident_id".
+AI_FIELDS: tuple[str, ...] = (
+    "risk_summary",
+    "category",
+    "severity",
+    "operational_impact",
+    "contextual_insights"
+)
+
+OFFLINE_MARKER = "[Offline Assessment]"
+
 
 # ============================================================
 # IMAGE PATH INTEGRATION
@@ -57,10 +72,11 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def prepare_image_path(record: dict[str, Any]) -> None:
     """
-    Converts the image path from IO_Manager into
-    a path usable by AI Manager.
+    Converts the relative image path from IO_Manager into
+    an absolute path usable by AI Manager.
 
-    This function does not handle JSON storage.
+    The absolute path is only used while the program runs;
+    Data_Manager stores the relative path instead.
     """
 
     image_path = (
@@ -82,6 +98,60 @@ def prepare_image_path(record: dict[str, Any]) -> None:
 
     else:
         record["visual_evidence_path"] = ""
+
+
+# ============================================================
+# AI ASSESSMENT
+# ============================================================
+
+def run_ai_assessment(
+    record: dict[str, Any]
+) -> tuple[dict[str, Any], str]:
+    """
+    Sends the record through the AI layer and returns
+    (assessment, assessment_source).
+
+    process_record() already returns the offline fallback
+    when Gemini is unavailable, so that case is detected
+    first instead of being validated (the fallback uses
+    categories outside the Gemini schema and would fail
+    validation, causing a second, misleading fallback).
+    """
+
+    try:
+        ai_result = process_record(record)
+
+    except Exception as error:
+
+        logger.error(
+            "AI processing failed: %s",
+            error
+        )
+
+        return handle_ai_failure(record), "Offline Fallback"
+
+    if not isinstance(ai_result, dict):
+
+        logger.warning(
+            "AI returned a non-dictionary result. "
+            "Applying offline fallback."
+        )
+
+        return handle_ai_failure(record), "Offline Fallback"
+
+    if OFFLINE_MARKER in str(ai_result.get("risk_summary", "")):
+        return ai_result, "Offline Fallback"
+
+    if not validate_response(ai_result):
+
+        logger.warning(
+            "Gemini result failed schema validation. "
+            "Applying offline fallback."
+        )
+
+        return handle_ai_failure(record), "Offline Fallback"
+
+    return ai_result, "Gemini AI"
 
 
 # ============================================================
@@ -240,47 +310,11 @@ def submit_hazard_report() -> None:
 
     print("\n[Processing] Analysing hazard report...")
 
-    assessment_source = "Gemini AI"
+    ai_result, assessment_source = run_ai_assessment(record)
 
-    try:
-        # logic_manager.process_record() calls ai_manager
-        ai_result = process_record(record)
-
-        # Validate Gemini response
-        if (
-            not isinstance(ai_result, dict)
-            or not validate_response(ai_result)
-        ):
-
-            logger.warning(
-                "AI result invalid. Applying offline fallback."
-            )
-
-            ai_result = handle_ai_failure(record)
-
-            assessment_source = "Offline Fallback"
-
-    except Exception as error:
-
-        logger.error(
-            "AI processing failed: %s",
-            error
-        )
-
-        ai_result = handle_ai_failure(record)
-
-        assessment_source = "Offline Fallback"
-
-    # process_record() may return an offline fallback
-    # when the Gemini API is unavailable.
-    if "[Offline Assessment]" in str(
-        ai_result.get("risk_summary", "")
-    ):
-
-        assessment_source = "Offline Fallback"
-
-    # Add assessment fields to the incident record
-    record.update(ai_result)
+    # Add only the expected assessment fields to the record
+    for key in AI_FIELDS:
+        record[key] = ai_result.get(key)
 
     record["assessment_source"] = assessment_source
 
@@ -420,8 +454,11 @@ def submit_hazard_report() -> None:
         return
 
     # --------------------------------------------------------
-    # STEP 11: SAVE INCIDENT THROUGH DATA MANAGER
+    # STEP 11: SAVE COMPLETE RECORD THROUGH DATA MANAGER
     # --------------------------------------------------------
+
+    # One record = reporter input + AI assessment + decision.
+    # main.py does not create or write JSON files.
 
     try:
         success = Data_Manager.save(record)
@@ -440,7 +477,10 @@ def submit_hazard_report() -> None:
         print("\n[Error] Failed to save hazard report.")
         return
 
-    print("\n[Success] Hazard report saved successfully!")
+    print(
+        "\n[Success] Hazard report and AI assessment "
+        "saved to hazardreportdb.json!"
+    )
 
     print(
         "Incident ID:",
@@ -448,44 +488,7 @@ def submit_hazard_report() -> None:
     )
 
     # --------------------------------------------------------
-    # STEP 12: SAVE AI ASSESSMENT THROUGH DATA MANAGER
-    # --------------------------------------------------------
-
-    # All JSON operations are handled by Data_Manager.
-    # main.py does not create or write JSON files.
-
-    try:
-        ai_saved = Data_Manager.save_ai_assessment(
-            record,
-            ai_result,
-            assessment_source
-        )
-
-    except Exception as error:
-
-        logger.error(
-            "AI assessment save failed: %s",
-            error
-        )
-
-        ai_saved = False
-
-    if ai_saved:
-
-        print(
-            "[Success] AI assessment saved "
-            "to ai_assessments.json through Data Manager!"
-        )
-
-    else:
-
-        print(
-            "[Warning] Incident saved, but AI assessment "
-            "could not be saved separately."
-        )
-
-    # --------------------------------------------------------
-    # STEP 13: DISPLAY FINAL RESULT
+    # STEP 12: DISPLAY FINAL RESULT
     # --------------------------------------------------------
 
     display_incident_result(record)
@@ -555,6 +558,10 @@ def main() -> None:
     """
     Main application controller.
     """
+
+    subprocess.Popen([ 
+    sys.executable, "-m", "streamlit", "run", "management_ui.py" 
+    ])
 
     print("\n==============================================")
     print("   CAMPUS SAFETY HAZARD REPORTING SYSTEM")
