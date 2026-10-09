@@ -3,10 +3,20 @@ import os
 import streamlit as st
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.environ.get("INCIDENTS_DB", os.path.join(BASE_DIR, "ai_assessments.json"))
+DATA_FILE = os.environ.get("INCIDENTS_DB", os.path.join(BASE_DIR, "hazardreportdb.json"))
 EMPTY_VALUES = {None, "", "None", "none", "null"}
 
 st.set_page_config(page_title="Incident Management", layout="wide")
+st.markdown(
+    """
+    <style>
+    [data-testid="stMarkdownContainer"] strong {
+        font-size: 1.15rem;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 st.title("Facilities incident management")
 
 # ---- Load data ----
@@ -88,10 +98,15 @@ with left:
     st.markdown(f"**Reported:** {incident.get('timestamp', '-')}")
     st.markdown(f"**Reporter:** {incident.get('reporter_name', '-')} ({incident.get('reporter_contact', '-')})")
     st.markdown(f"**People affected:** {incident.get('impact_headcount', '-')}")
-    st.markdown(f"**Duplicate:** {'Yes' if incident.get('is_duplicate') else 'No'}")
+    st.markdown(f"**Duplicate:** {incident.get('is_duplicate', '-')}")
+    st.markdown(f"**Historical frequency:** {incident.get('historical_frequency', '-')}")
+    st.markdown(f"**Recommended action:** {incident.get('recommended_action', '-')}")
+    st.markdown(f"**Assigned route:** {incident.get('assigned_route', '-')}")
+    st.markdown(f"**Escalation reason:** {incident.get('escalation_reason', '-')}")
+    st.markdown(f"**Assessment source:** {incident.get('assessment_source', '-')}")
     st.markdown("**Description**")
     st.info(incident.get("description", "-"))
-    
+
     # Risk summary uses "•" or "-" bullets on separate lines; render as a markdown list
     st.markdown("**AI risk summary**")
     risk_summary = incident.get("risk_summary")
@@ -105,7 +120,7 @@ with left:
     st.info(incident.get("contextual_insights") or "No insights available.")
 
 with right:
-    image_path = incident.get("visual_evidence")
+    image_path = incident.get("image_path")
     if image_path and os.path.isfile(image_path):
         st.image(image_path, caption="Visual evidence")
     else:
