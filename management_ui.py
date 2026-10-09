@@ -57,12 +57,10 @@ if not incidents:
     st.info("No incidents to show yet.")
     st.stop()
 
-def get_priority_score(i):
-    return i.get("priority_score") or 0
-
 # Highest priority first
 def get_priority_score(i):
     return i.get("priority_score") or 0
+
 incidents = sorted(incidents, key=get_priority_score, reverse=True)
 
 # ---- Incident table ----
@@ -85,6 +83,38 @@ st.dataframe(
     hide_index=False,
     width="stretch",
 )
+
+
+# ---- Export ----
+def export_and_offer_download(export_fn, filename, label, mime):
+    """Runs a data_manager export, then offers the saved file as a download."""
+    if not export_fn(filename):
+        st.error(f"{label} export failed. Check that the database exists and has incidents.")
+        return
+
+    file_path = os.path.join(get_data_dir(), filename)
+    st.success(f"{label} saved to {file_path}")
+
+    with open(file_path, "rb") as f:
+        st.download_button(
+            f"Download {filename}",
+            data=f.read(),
+            file_name=filename,
+            mime=mime,
+            key=f"download_{filename}",
+        )
+
+
+st.markdown("### Export incidents")
+csv_col, txt_col = st.columns(2)
+
+with csv_col:
+    if st.button("Export to CSV", key="export_csv"):
+        export_and_offer_download(export_incidents_to_csv, CSV_FILENAME, "CSV", "text/csv")
+
+with txt_col:
+    if st.button("Export to TXT", key="export_txt"):
+        export_and_offer_download(export_incidents_to_txt, TXT_FILENAME, "TXT", "text/plain")
 
 st.divider()
 
