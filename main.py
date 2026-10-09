@@ -554,16 +554,19 @@ def view_top_five_hazards() -> None:
 # MAIN APPLICATION
 # ============================================================
 
+
 def main() -> None:
     """
     Main application controller.
     """
 
     streamlit_proc = subprocess.Popen(
-    [sys.executable, "-m", "streamlit", "run", "management_ui.py"],
-    stdout=subprocess.DEVNULL,
-    stderr=subprocess.DEVNULL,
-)
+        [sys.executable, "-m", "streamlit", "run",
+         os.path.join(BASE_DIR, "management_ui.py")],
+        cwd=BASE_DIR,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
     print("\n==============================================")
     print("   CAMPUS SAFETY HAZARD REPORTING SYSTEM")
@@ -571,60 +574,63 @@ def main() -> None:
 
     print("System initialized successfully.")
 
-    while True:
+    try:
+        while True:
+            try:
+                choice = IO_Manager.display_menu()
 
-        try:
-            choice = IO_Manager.display_menu()
+                # OPTION 1: SUBMIT REPORT
+                if choice == "1":
+                    submit_hazard_report()
 
-            # OPTION 1: SUBMIT REPORT
-            if choice == "1":
+                # OPTION 2: VIEW ALL REPORTS
+                elif choice == "2":
+                    view_all_incidents()
 
-                submit_hazard_report()
+                # OPTION 3: VIEW TOP FIVE HAZARDS
+                elif choice == "3":
+                    view_top_five_hazards()
 
-            # OPTION 2: VIEW ALL REPORTS
-            elif choice == "2":
+                # OPTION 4: EXIT
+                elif choice == "4":
+                    print(
+                        "\nExiting Campus Safety Hazard "
+                        "Reporting System. Goodbye!"
+                    )
+                    break
 
-                view_all_incidents()
+                else:
+                    print("\n[Error] Invalid menu option.")
 
-            # OPTION 3: VIEW TOP FIVE HAZARDS
-            elif choice == "3":
-
-                view_top_five_hazards()
-
-            # OPTION 4: EXIT
-            elif choice == "4":
-
-                print(
-                    "\nExiting Campus Safety Hazard "
-                    "Reporting System. Goodbye!"
-                )
-                streamlit_proc.terminate()
-                streamlit_proc.wait()
-
+            except KeyboardInterrupt:
+                print("\n[Notice] Application interrupted.")
                 break
 
-            else:
+            except EOFError:
+                print("\n[Notice] Input stream closed.")
+                break
 
-                print("\n[Error] Invalid menu option.")
+            except Exception as error:
+                logger.exception(
+                    "Unexpected application error: %s",
+                    error
+                )
 
-        except KeyboardInterrupt:
+                print("\n[Error] An unexpected error occurred.")
 
-            print("\n[Notice] Application interrupted.")
-            break
+    finally:
+        # Stop Streamlit when the CLI application exits
+        if streamlit_proc.poll() is None:
+            streamlit_proc.terminate()
 
-        except EOFError:
+            try:
+                streamlit_proc.wait(timeout=5)
 
-            print("\n[Notice] Input stream closed.")
-            break
+            except subprocess.TimeoutExpired:
+                streamlit_proc.kill()
+                streamlit_proc.wait()
 
-        except Exception as error:
-
-            logger.exception(
-                "Unexpected application error: %s",
-                error
-            )
-
-            print("\n[Error] An unexpected error occurred.")
+        print("[Info] Application shutdown completed.")
 
 
 # ============================================================
