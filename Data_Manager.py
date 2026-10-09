@@ -1,4 +1,3 @@
-
 """
 INF1103 Team 4
 Campus Safety Hazard Reporting System
@@ -6,13 +5,18 @@ Campus Safety Hazard Reporting System
 DATA MANAGER
 
 Handles:
-1. Incident database storage
-2. AI assessment database storage
-3. Incident ID generation
-4. Searching and updating incidents
-5. Deleting and clearing incidents
-6. Exporting incidents to CSV
+1. Incident database storage (hazardreportdb.json)
+2. Incident ID generation
+3. Searching and updating incidents
+4. Deleting and clearing incidents
+5. Exporting incidents to CSV
 
+Every incident is stored as ONE complete record containing:
+    - the reporter's input,
+    - the AI assessment (Gemini or offline fallback),
+    - the priority and routing decision.
+
+hazardreportdb.json is the single database for the system.
 All JSON reading and writing happens in this module.
 """
 
@@ -21,7 +25,7 @@ import json
 import csv
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Callable, Optional
 
 
 # ============================================================
@@ -33,9 +37,51 @@ logger = logging.getLogger(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DB_FILENAME = "hazardreportdb.json"
-AI_DB_FILENAME = "ai_assessments.json"
 
 last_load_warning = ""
+
+# Complete schema of a stored incident, in the order fields
+# appear in hazardreportdb.json. Every new record is saved with
+# all of these keys so the database has one consistent shape.
+RECORD_FIELDS: list[str] = [
+    # Identification
+    "incident_id",
+    "timestamp",
+    "status",
+
+    # Reporter input (IO_Manager)
+    "reporter_name",
+    "reporter_contact",
+    "location",
+    "impact_headcount",
+    "asset_info",
+    "description",
+    "image_path",
+
+    # AI assessment (ai_manager / offline fallback)
+    "assessment_source",
+    "category",
+    "severity",
+    "operational_impact",
+    "risk_summary",
+    "contextual_insights",
+
+    # Priority and routing decision (logic_manager)
+    "historical_frequency",
+    "is_duplicate",
+    "priority_score",
+    "final_priority",
+    "recommended_action",
+    "escalation_reason",
+    "assigned_route"
+]
+
+# Keys used only while the program is running.
+# visual_evidence_path is an absolute path on the reporter's
+# computer, so it is not stored (it breaks on other machines).
+TRANSIENT_FIELDS: tuple[str, ...] = (
+    "visual_evidence_path",
+)
 
 
 def get_data_dir() -> str:
@@ -64,17 +110,6 @@ def get_db_path() -> str:
     return os.path.join(
         get_data_dir(),
         DB_FILENAME
-    )
-
-
-def get_ai_db_path() -> str:
-    """
-    Returns the AI assessment database path.
-    """
-
-    return os.path.join(
-        get_data_dir(),
-        AI_DB_FILENAME
     )
 
 
@@ -158,6 +193,13 @@ def write_json(
             file_path,
             error
         )
+
+        if os.path.exists(temp_path):
+            try:
+                os.remove(temp_path)
+            except OSError:
+                pass
+
         return False
 
 
@@ -193,6 +235,48 @@ def load() -> list[dict[str, Any]]:
 
 
 # ============================================================
+# BUILD FINAL RECORD
+# ============================================================
+
+def build_final_record(
+    record: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Returns a clean copy of an incident ready for storage.
+
+    - Schema fields come first, in RECORD_FIELDS order.
+      Missing schema fields are stored as None.
+    - Any extra fields are kept after the schema fields.
+    - Runtime-only fields are removed.
+    - IO_Manager's "image_patch" key is stored as "image_path".
+
+    The original record is not modified.
+    """
+
+    clean = dict(record)
+
+    # IO_Manager returns the image under "image_patch"
+    image_value = clean.pop("image_patch", "")
+
+    if not clean.get("image_path"):
+        clean["image_path"] = image_value or ""
+
+    for key in TRANSIENT_FIELDS:
+        clean.pop(key, None)
+
+    final_record = {
+        key: clean.get(key)
+        for key in RECORD_FIELDS
+    }
+
+    for key, value in clean.items():
+        if key not in final_record:
+            final_record[key] = value
+
+    return final_record
+
+
+# ============================================================
 # GENERATE INCIDENT ID
 # ============================================================
 
@@ -200,10 +284,8 @@ def generate_incident_id(
     records: list[dict[str, Any]]
 ) -> str:
     """
-    Generates the next incident ID.
-
-    Also checks AI assessment IDs so an incident ID
-    is not reused while an older AI assessment exists.
+    Generates the next incident ID based on the highest
+    existing ID in hazardreportdb.json.
     """
 
     highest_id = 0
@@ -217,32 +299,20 @@ def generate_incident_id(
             if number.isdigit():
                 highest_id = max(highest_id, int(number))
 
-    # Include IDs from previous AI assessments
-    ai_records = read_json(get_ai_db_path())
-
-    for assessment in ai_records:
-        incident_id = str(
-            assessment.get("incident_id", "")
-        )
-
-        if incident_id.startswith("INCIDENT-"):
-            number = incident_id[len("INCIDENT-"):]
-
-            if number.isdigit():
-                highest_id = max(highest_id, int(number))
-
     return f"INCIDENT-{highest_id + 1:03d}"
 
 
 # ============================================================
-# SAVE INCIDENT
+# SAVE INCIDENT (INPUT + AI ASSESSMENT + DECISION)
 # ============================================================
 
 def save(record: dict[str, Any]) -> bool:
     """
-    Saves a new incident into hazardreportdb.json.
+    Saves one complete incident into hazardreportdb.json.
 
-    Assigns an incident ID and timestamp.
+    Assigns an incident ID, timestamp and default status
+    if they are missing. These are also written back to the
+    given record so the caller can display them.
     """
 
     if not isinstance(record, dict):
@@ -257,22 +327,8 @@ def save(record: dict[str, Any]) -> bool:
         )
         return False
 
-    try:
-        if not record.get("incident_id"):
-            record["incident_id"] = generate_incident_id(
-                records
-            )
-
-    except (
-        OSError,
-        json.JSONDecodeError,
-        ValueError
-    ) as error:
-        logger.error(
-            "Unable to generate incident ID: %s",
-            error
-        )
-        return False
+    if not record.get("incident_id"):
+        record["incident_id"] = generate_incident_id(records)
 
     if not record.get("timestamp"):
         record["timestamp"] = datetime.now().strftime(
@@ -290,121 +346,18 @@ def save(record: dict[str, Any]) -> bool:
             )
             return False
 
-    records.append(record)
+    records.append(build_final_record(record))
 
     return write_json(get_db_path(), records)
-
-
-# ============================================================
-# SAVE AI ASSESSMENT
-# ============================================================
-
-def save_ai_assessment(
-    record: dict[str, Any],
-    ai_result: dict[str, Any],
-    assessment_source: str
-) -> bool:
-    """
-    Saves AI assessment data to ai_assessments.json.
-
-    The AI assessment is linked to the original
-    incident through its incident_id.
-    """
-
-    if not isinstance(record, dict):
-        logger.error("Invalid incident record.")
-        return False
-
-    if not isinstance(ai_result, dict):
-        logger.error("Invalid AI assessment.")
-        return False
-
-    incident_id = record.get("incident_id")
-
-    if not incident_id:
-        logger.error(
-            "Cannot save AI assessment without incident ID."
-        )
-        return False
-
-    # Load existing AI assessments
-    try:
-        assessments = read_json(get_ai_db_path())
-
-    except (
-        OSError,
-        json.JSONDecodeError,
-        ValueError
-    ) as error:
-        logger.error(
-            "Unable to load AI assessments: %s",
-            error
-        )
-        return False
-
-    # Prevent duplicate assessment IDs
-    for existing in assessments:
-        if existing.get("incident_id") == incident_id:
-            logger.error(
-                "AI assessment already exists for %s",
-                incident_id
-            )
-            return False
-
-    # Prepare assessment record
-    assessment = {
-        "incident_id": incident_id,
-        "timestamp": record.get("timestamp"),
-        "reporter_name": record.get("reporter_name"),
-        "location": record.get("location"),
-        "asset_info": record.get("asset_info"),
-        "description": record.get("description"),
-        "assessment_source": assessment_source,
-        "risk_summary": ai_result.get("risk_summary"),
-        "category": ai_result.get("category"),
-        "severity": ai_result.get("severity"),
-        "operational_impact": ai_result.get(
-            "operational_impact"
-        ),
-        "contextual_insights": ai_result.get(
-            "contextual_insights"
-        ),
-        "historical_frequency": record.get(
-            "historical_frequency"
-        ),
-        "priority_score": record.get(
-            "priority_score"
-        ),
-        "final_priority": record.get(
-            "final_priority"
-        ),
-        "recommended_action": record.get(
-            "recommended_action"
-        ),
-        "escalation_reason": record.get(
-            "escalation_reason"
-        ),
-        "assigned_route": record.get(
-            "assigned_route"
-        ),
-        "is_duplicate": record.get(
-            "is_duplicate"
-        )
-    }
-
-    assessments.append(assessment)
-
-    return write_json(
-        get_ai_db_path(),
-        assessments
-    )
 
 
 # ============================================================
 # QUERY INCIDENTS
 # ============================================================
 
-def query(filter_fn) -> list[dict[str, Any]]:
+def query(
+    filter_fn: Callable[[dict[str, Any]], bool]
+) -> list[dict[str, Any]]:
     """
     Filters incidents using a function.
 
@@ -412,13 +365,13 @@ def query(filter_fn) -> list[dict[str, Any]]:
         query(lambda r: r.get("status") == "Pending Review")
     """
 
+    if not callable(filter_fn):
+        logger.error("query() requires a filter function.")
+        return []
+
     records = load()
 
     if last_load_warning:
-        return []
-
-    if not callable(filter_fn):
-        logger.error("query() requires a filter function.")
         return []
 
     return [
@@ -426,6 +379,20 @@ def query(filter_fn) -> list[dict[str, Any]]:
         for record in records
         if filter_fn(record)
     ]
+
+
+def get_incident_by_id(
+    incident_id: str
+) -> Optional[dict[str, Any]]:
+    """
+    Returns the incident with the given ID, or None.
+    """
+
+    matches = query(
+        lambda record: record.get("incident_id") == incident_id
+    )
+
+    return matches[0] if matches else None
 
 
 # ============================================================
@@ -465,9 +432,7 @@ def delete_incident_by_id(
     incident_id: str
 ) -> bool:
     """
-    Deletes an incident by ID.
-
-    Existing AI assessments are preserved.
+    Deletes an incident (including its AI assessment) by ID.
     """
 
     records = load()
@@ -496,12 +461,10 @@ def delete_incident_by_id(
 
 def clear_database() -> bool:
     """
-    Clears the incident database.
-
-    AI assessment records are not deleted.
+    Clears all incidents (including their AI assessments).
     """
 
-    records = load()
+    load()
 
     if last_load_warning:
         return False
@@ -528,7 +491,7 @@ def export_incidents_to_csv(
     if last_load_warning or not records:
         return False
 
-    fieldnames = []
+    fieldnames: list[str] = []
 
     for record in records:
         for key in record.keys():
