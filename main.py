@@ -1,298 +1,553 @@
+
 """
 Module Name: main.py
-Purpose: Serves as the primary entry point and orchestrator for the 
-         Campus Safety Hazard Reporting System. Coordinates IO, AI, Logic, and Data.
+
+Purpose:
+Main application controller for the Campus Safety Hazard Reporting System.
+
+Integration flow:
+1. I/O Manager collects and validates user input.
+2. AI Manager analyses the hazard report.
+3. Logic Manager evaluates risk, priority and duplicates.
+4. Data Manager saves and retrieves incident records.
+5. I/O Manager displays results to the user.
+
+This application follows procedural programming principles.
 """
 
-import sys
-from dotenv import load_dotenv
-from typing import Any, Callable, cast
+import os
+import logging
+from typing import Any
+import subprocess 
+import sys 
 
-# Load environment variables from the local .env file
+
+from dotenv import load_dotenv
+
+# Load API key and other environment variables
 load_dotenv()
 
-from io_manager import (
-    display_menu,
-    get_user_input,
-    get_confirmation,
-    confirm_clear,
-    get_search_keyword,
-    select_incident_interactively as _select_incident_interactively,  # type: ignore[reportUnknownVariableType]
-    display_summary as _display_summary,  # type: ignore[reportUnknownVariableType]
-    display_result as _display_result,  # type: ignore[reportUnknownVariableType]
-    display_list as _display_list,  # type: ignore[reportUnknownVariableType]
-    display_message as _display_message,  # type: ignore[reportUnknownVariableType]
-)
+# ============================================================
+# IMPORT TEAMMATES' MODULES
+# ============================================================
 
-# Type-safe casting for IO manager functions
-select_incident_interactively: Callable[[list[dict[str, Any]]], str | None] = cast(
-    Callable[[list[dict[str, Any]]], str | None],
-    _select_incident_interactively,
-)
-display_summary: Callable[[str | None], None] = cast(
-    Callable[[str | None], None],
-    _display_summary,
-)
-display_result: Callable[[dict[str, Any]], None] = cast(
-    Callable[[dict[str, Any]], None],
-    _display_result,
-)
-display_list: Callable[[list[dict[str, Any]]], None] = cast(
-    Callable[[list[dict[str, Any]]], None],
-    _display_list,
-)
-display_message: Callable[[str], None] = cast(
-    Callable[[str], None],
-    _display_message,
-)
+import IO_Manager
+import Data_Manager
 
-from ai_manager import (
-    build_prompt as _build_prompt,  # type: ignore[reportUnknownVariableType]
-    call_api as _call_api,  # type: ignore[reportUnknownVariableType]
-    parse_response as _parse_response,  # type: ignore[reportUnknownVariableType]
-    validate_response as _validate_response,  # type: ignore[reportUnknownVariableType]
-)
-
-# Type-safe casting for AI manager functions
-build_prompt: Callable[[dict[str, Any]], str] = cast(
-    Callable[[dict[str, Any]], str],
-    _build_prompt,
-)
-call_api: Callable[[str, str | None], str] = cast(
-    Callable[[str, str | None], str],
-    _call_api,
-)
-parse_response: Callable[[Any], dict[str, Any] | None] = cast(
-    Callable[[Any], dict[str, Any] | None],
-    _parse_response,
-)
-validate_response: Callable[[dict[str, Any]], bool] = cast(
-    Callable[[dict[str, Any]], bool],
-    _validate_response,
-)
+from ai_manager import validate_response
 
 from logic_manager import (
-    score as _score,  # type: ignore[reportUnknownVariableType]
-    route as _route,  # type: ignore[reportUnknownVariableType]
-    check_duplicate as _check_duplicate,  # type: ignore[reportUnknownVariableType]
-    sort_incidents_by_severity as _sort_incidents_by_severity,  # type: ignore[reportUnknownVariableType]
+    process_record,
+    handle_ai_failure,
+    calculate_historical_frequency,
+    evaluate,
+    check_duplicate,
+    sort_incidents_by_severity,
+)
+subprocess.Popen([ 
+    sys.executable, "-m", "streamlit", "run", "staff_ui/management_ui.py" 
+])
+
+
+# ============================================================
+# LOGGING CONFIGURATION
+# ============================================================
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s"
 )
 
-# Type-safe casting for Logic manager functions
-score: Callable[[dict[str, Any]], float] = cast(
-    Callable[[dict[str, Any]], float],
-    _score,
-)
-route: Callable[[dict[str, Any]], str] = cast(
-    Callable[[dict[str, Any]], str],
-    _route,
-)
-check_duplicate: Callable[[dict[str, Any], list[dict[str, Any]]], bool] = cast(
-    Callable[[dict[str, Any], list[dict[str, Any]]], bool],
-    _check_duplicate,
-)
-sort_incidents_by_severity: Callable[[list[dict[str, Any]]], list[dict[str, Any]]] = cast(
-    Callable[[list[dict[str, Any]]], list[dict[str, Any]]],
-    _sort_incidents_by_severity,
-)
+logger = logging.getLogger(__name__)
 
-from data_manager import (
-    load as _load,  # type: ignore[reportUnknownVariableType]
-    save as _save,  # type: ignore[reportUnknownVariableType]
-    query as _query,  # type: ignore[reportUnknownVariableType]
-    clear_database, 
-    export_incidents_to_txt, 
-    update_incident_status as _update_incident_status,  # type: ignore[reportUnknownVariableType]
-    delete_incident_by_id as _delete_incident_by_id,  # type: ignore[reportUnknownVariableType]
-)
 
-# Type-safe casting for Data manager functions
-load = _load
-save: Callable[[list[dict[str, Any]]], bool] = cast(
-    Callable[[list[dict[str, Any]]], bool],
-    _save,
-)
-query: Callable[[str], list[dict[str, Any]]] = cast(
-    Callable[[str], list[dict[str, Any]]],
-    _query,
-)
-update_incident_status: Callable[[str, str], bool] = cast(
-    Callable[[str, str], bool],
-    _update_incident_status,
-)
-delete_incident_by_id: Callable[[str], bool] = cast(
-    Callable[[str], bool],
-    _delete_incident_by_id,
-)
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
 
-def generate_incident_id(records: list[dict[str, Any]]) -> str:
+def prepare_image_path(record: dict[str, Any]) -> None:
     """
-    Generates a unique incremental incident ID by scanning the highest existing ID number.
-    Example: If 'INCIDENT-002' is the highest, returns 'INCIDENT-003'.
-    """
-    if not records:
-        return "INCIDENT-001"
-    
-    max_num = 0
-    for r in records:
-        inc_id = r.get("incident_id", "")
-        try:
-            # Extract numerical sequence after hyphen (e.g., "INCIDENT-002" -> 2)
-            num = int(inc_id.split("-")[1])
-            if num > max_num:
-                max_num = num
-        except (IndexError, ValueError):
-            continue
-            
-    return f"INCIDENT-{max_num + 1:03d}"
+    Converts the I/O Manager's image_patch field into the
+    visual_evidence_path field expected by the Logic Manager
+    and AI Manager.
 
-def main():
-    """Main application loop coordinating user actions and backend processing."""
+    The original image_patch field is preserved.
+    """
+
+    image_path = (
+        record.get("image_patch")
+        or record.get("visual_evidence_path")
+        or ""
+    )
+
+    if image_path:
+        image_path = str(image_path).strip()
+
+        if not os.path.isabs(image_path):
+            image_path = os.path.join(
+                os.path.dirname(os.path.abspath(__file__)),
+                image_path
+            )
+
+        record["visual_evidence_path"] = image_path
+
+    else:
+        record["visual_evidence_path"] = ""
+
+
+def display_incident_result(record: dict[str, Any]) -> None:
+    """
+    Displays the final result after successful submission.
+
+    All user-facing output is delegated to the I/O Manager.
+    """
+
+    IO_Manager.view_all_reports([record])
+
+    print("\n========== AI RISK ASSESSMENT ==========")
+
+    print(
+        "Incident ID:",
+        record.get("incident_id", "N/A")
+    )
+
+    print(
+        "Category:",
+        record.get("category", "N/A")
+    )
+
+    print(
+        "Severity:",
+        record.get("severity", "N/A")
+    )
+
+    print(
+        "Operational Impact:",
+        record.get("operational_impact", "N/A")
+    )
+
+    print(
+        "Risk Summary:",
+        record.get("risk_summary", "N/A")
+    )
+
+    print(
+        "Priority Score:",
+        record.get("priority_score", "N/A")
+    )
+
+    print(
+        "Final Priority:",
+        record.get("final_priority", "N/A")
+    )
+
+    print(
+        "Recommended Action:",
+        record.get("recommended_action", "N/A")
+    )
+
+    print(
+        "Assigned Route:",
+        record.get("assigned_route", "N/A")
+    )
+
+    print(
+        "Duplicate Check:",
+        record.get("is_duplicate", "N/A")
+    )
+
+    print(
+        "Status:",
+        record.get("status", "N/A")
+    )
+
+    print("========================================")
+
+
+# ============================================================
+# OPTION 1: SUBMIT NEW HAZARD REPORT
+# ============================================================
+
+def submit_hazard_report() -> None:
+    """
+    Coordinates the complete hazard reporting workflow.
+
+    I/O -> AI -> Logic -> Data -> I/O
+    """
+
+    print("\n==============================================")
+    print("          NEW HAZARD REPORT WORKFLOW          ")
+    print("==============================================")
+
+    # --------------------------------------------------------
+    # STEP 1: COLLECT USER INPUT
+    # --------------------------------------------------------
+
+    try:
+        record = IO_Manager.get_user_input()
+
+    except (KeyboardInterrupt, EOFError):
+        print("\n[Notice] Report submission cancelled.")
+        return
+
+    if not isinstance(record, dict):
+        print("[Error] Invalid report data received.")
+        return
+
+    # --------------------------------------------------------
+    # STEP 2: PREPARE IMAGE EVIDENCE
+    # --------------------------------------------------------
+
+    prepare_image_path(record)
+
+    # --------------------------------------------------------
+    # STEP 3: LOAD EXISTING INCIDENT RECORDS
+    # --------------------------------------------------------
+
+    existing_records = Data_Manager.load()
+
+    if Data_Manager.last_load_warning:
+        print(
+            "[Warning]",
+            Data_Manager.last_load_warning
+        )
+
+        # Do not overwrite an unreadable database.
+        if os.path.exists(Data_Manager.get_db_path()):
+            print(
+                "[Error] Submission stopped to protect "
+                "the existing database."
+            )
+            return
+
+    # --------------------------------------------------------
+    # STEP 4: SEND REPORT THROUGH AI MANAGER
+    # --------------------------------------------------------
+
+    print("\n[Processing] Analysing hazard report...")
+
+    try:
+        ai_result = process_record(record)
+
+        if not isinstance(ai_result, dict):
+            raise ValueError("Invalid AI result format")
+
+        if not validate_response(ai_result):
+            logger.warning(
+                "AI result failed validation. "
+                "Using offline fallback."
+            )
+            ai_result = handle_ai_failure(record)
+
+    except Exception as error:
+
+        logger.error(
+            "AI processing failed: %s",
+            error
+        )
+
+        ai_result = handle_ai_failure(record)
+
+    # Merge assessment fields into original report
+    record.update(ai_result)
+
+    # --------------------------------------------------------
+    # STEP 5: HISTORICAL FREQUENCY
+    # --------------------------------------------------------
+
+    record["historical_frequency"] = (
+        calculate_historical_frequency(
+            record,
+            existing_records
+        )
+    )
+
+    # --------------------------------------------------------
+    # STEP 6: DUPLICATE DETECTION
+    # --------------------------------------------------------
+
+    record["is_duplicate"] = check_duplicate(
+        record,
+        existing_records
+    )
+
+    # --------------------------------------------------------
+    # STEP 7: PRIORITY EVALUATION
+    # --------------------------------------------------------
+
+    try:
+        decision = evaluate(record)
+
+    except Exception as error:
+
+        logger.error(
+            "Logic evaluation failed: %s",
+            error
+        )
+
+        print(
+            "[Error] Unable to evaluate hazard priority."
+        )
+        return
+
+    record["priority_score"] = decision["score"]
+
+    record["final_priority"] = decision["priority"]
+
+    record["recommended_action"] = decision["action"]
+
+    record["escalation_reason"] = decision["reason"]
+
+    record["assigned_route"] = decision["route"]
+
+    # --------------------------------------------------------
+    # STEP 8: INITIAL STATUS
+    # --------------------------------------------------------
+
+    record["status"] = "Pending Review"
+
+    # --------------------------------------------------------
+    # STEP 9: DISPLAY ASSESSMENT SUMMARY
+    # --------------------------------------------------------
+
+    print("\n========== PRE-SUBMISSION SUMMARY ==========")
+
+    print(
+        "Location:",
+        record.get("location", "N/A")
+    )
+
+    print(
+        "Hazard:",
+        record.get("asset_info", "N/A")
+    )
+
+    print(
+        "Severity:",
+        record.get("severity", "N/A")
+    )
+
+    print(
+        "Priority:",
+        record.get("final_priority", "N/A")
+    )
+
+    print(
+        "Recommended Action:",
+        record.get("recommended_action", "N/A")
+    )
+
+    print(
+        "Duplicate Check:",
+        record.get("is_duplicate", "N/A")
+    )
+
+    print("============================================")
+
+    # --------------------------------------------------------
+    # STEP 10: CONFIRM SUBMISSION
+    # --------------------------------------------------------
+
     while True:
-        # Display the main console menu and retrieve validated user choice (1-8)
-        choice = display_menu()
-        
-        if choice == "1":
-            # ==========================================
-            # 1. Submit New Hazard Report Pipeline
-            # ==========================================
-            
-            # Step A: Capture validated user input fields
-            record = get_user_input()
-            
-            # Step B: Build prompt, query Gemini AI API, and parse response
-            prompt = build_prompt(record)
-            raw_response = call_api(prompt, record.get("visual_evidence"))
-            parsed_data = parse_response(raw_response)
-            
-            # Step C: Validate AI schema; use intelligent fallback defaults if validation fails
-            if parsed_data and validate_response(parsed_data):
-                record.update(parsed_data)
-            else:
-                display_message("[Warning] AI validation failed or fallback triggered. Using default assessment.")
-                record.update({
-                    "risk_summary": "- Unverified assessment due to network or parsing issue.",
-                    "category": "General",
-                    "severity": "Medium",
-                    "operational_impact": "Moderate",
-                    "contextual_insights": "Standard facility review recommended."
-                })
-            
-            # Step D: Calculate mathematical priority score and determine operational route queue
-            record["priority_score"] = score(record)
-            record["final_priority"] = route(record)
-            
-            # Step E: Check database for duplicate active reports and set initial review status
-            existing_records = load()
-            record["is_duplicate"] = check_duplicate(record, existing_records)
-            record["status"] = "Pending Review"
-            
-            # Step F: Display pre-submission AI risk summary for user review
-            display_summary(record.get("risk_summary"))
-            
-            # Step G: Prompt confirmation before persisting to the database
-            confirm = get_confirmation()
-            if confirm == "y":
-                # Assign unique sequential ID and append to records list
-                record["incident_id"] = generate_incident_id(existing_records)
-                existing_records.append(record)
-                
-                # Sort records by severity and persist to JSON storage
-                sorted_records = sort_incidents_by_severity(existing_records)
-                if save(sorted_records):
-                    display_result(record)
-                else:
-                    display_message("[Error] Failed to save record to database.")
-            else:
-                display_message("[Notice] Report submission cancelled.")
-                
-        elif choice == "2":
-            # ==========================================
-            # 2. View All Logged Incidents
-            # ==========================================
-            records = load()
-            sorted_records = sort_incidents_by_severity(records)
-            display_list(sorted_records)
-            
-        elif choice == "3":
-            # ==========================================
-            # 3. Query Incidents by Location or Asset
-            # ==========================================
-            keyword = get_search_keyword()
-            if keyword:
-                results = query(keyword)
-                display_list(results)
-            else:
-                display_message("[Notice] Search keyword cannot be empty.")
-                
-        elif choice == "4":
-            # ==========================================
-            # 4. Export Incidents to Excel Report
-            # ==========================================
-            success = export_incidents_to_txt("safety_report.xlsx")
-            if success:
-                display_message("\n[Success] All incident records successfully exported to 'safety_report.xlsx'!")
-            else:
-                display_message("\n[Notice] No records found to export.")
-                
-        elif choice == "5":
-            # ==========================================
-            # 5. Clear All Logged Records
-            # ==========================================
-            confirm = confirm_clear()
-            if confirm == "y":
-                if clear_database():
-                    display_message("\n[Success] All incident records have been permanently cleared.")
-                else:
-                    display_message("[Error] Failed to clear database.")
-            else:
-                display_message("[Notice] Clear action cancelled.")
-                
-        elif choice == "6":
-            # ==========================================
-            # 6. Mark Incident as Resolved
-            # ==========================================
-            records = load()
-            if not records:
-                display_message("\n[Notice] No incident records found in the database.")
-            else:
-                inc_id = select_incident_interactively(records)
-                if inc_id:
-                    success = update_incident_status(inc_id, "Resolved")
-                    if success:
-                        display_message(f"\n[Success] Incident {inc_id} has been marked as Resolved!")
-                    else:
-                        display_message(f"\n[Error] Incident ID '{inc_id}' not found.")
-                else:
-                    display_message("\n[Notice] Operation cancelled.")
-                
-        elif choice == "7":
-            # ==========================================
-            # 7. Delete Specific Incident Record
-            # ==========================================
-            records = load()
-            if not records:
-                display_message("\n[Notice] No incident records found in the database.")
-            else:
-                inc_id = select_incident_interactively(records)
-                if inc_id:
-                    success = delete_incident_by_id(inc_id)
-                    if success:
-                        display_message(f"\n[Success] Incident {inc_id} has been permanently deleted from the database.")
-                    else:
-                        display_message(f"\n[Error] Incident ID '{inc_id}' not found.")
-                else:
-                    display_message("\n[Notice] Operation cancelled.")
 
-        elif choice == "8":
-            # ==========================================
-            # 8. Exit Application
-            # ==========================================
-            display_message("\nExiting Campus Safety System. Stay safe!")
-            sys.exit(0)
-            
-        else:
-            display_message("\n[Error] Invalid option selected. Please choose a number between 1 and 8.")
+        confirmation = input(
+            "\nConfirm hazard report submission? (y/n): "
+        ).strip().lower()
+
+        if confirmation in ("y", "yes", "n", "no"):
+            break
+
+        print(
+            "[Error] Please enter y or n."
+        )
+
+    if confirmation in ("n", "no"):
+
+        print(
+            "\n[Notice] Hazard report submission cancelled."
+        )
+        return
+
+    # --------------------------------------------------------
+    # STEP 11: SAVE THROUGH DATA MANAGER
+    # --------------------------------------------------------
+
+    try:
+        success = Data_Manager.save(record)
+
+    except Exception as error:
+
+        logger.error(
+            "Database save failed: %s",
+            error
+        )
+
+        success = False
+
+    if not success:
+
+        print(
+            "\n[Error] Failed to save hazard report."
+        )
+        return
+
+    # The Data Manager assigns incident ID and timestamp.
+    print(
+        "\n[Success] Hazard report saved successfully!"
+    )
+
+    # --------------------------------------------------------
+    # STEP 12: DISPLAY FINAL RESULT
+    # --------------------------------------------------------
+
+    display_incident_result(record)
+
+
+# ============================================================
+# OPTION 2: VIEW ALL INCIDENTS
+# ============================================================
+
+def view_all_incidents() -> None:
+    """
+    Retrieves incidents from the Data Manager,
+    sorts them by severity, and displays them.
+    """
+
+    records = Data_Manager.load()
+
+    if Data_Manager.last_load_warning:
+        print(
+            "[Warning]",
+            Data_Manager.last_load_warning
+        )
+
+    if not records:
+
+        print(
+            "\n[Notice] No hazard reports found."
+        )
+        return
+
+    sorted_records = sort_incidents_by_severity(
+        records
+    )
+
+    IO_Manager.view_all_reports(
+        sorted_records
+    )
+
+
+# ============================================================
+# OPTION 3: VIEW TOP 5 FREQUENT HAZARDS
+# ============================================================
+
+def view_top_five_hazards() -> None:
+    """
+    Retrieves stored incident records and displays
+    the five most frequently reported hazard types.
+    """
+
+    records = Data_Manager.load()
+
+    if Data_Manager.last_load_warning:
+        print(
+            "[Warning]",
+            Data_Manager.last_load_warning
+        )
+
+    IO_Manager.view_frequent_hazards(
+        records,
+        top_n=5
+    )
+
+
+# ============================================================
+# MAIN APPLICATION MENU
+# ============================================================
+
+def main() -> None:
+    """
+    Main application loop.
+
+    Coordinates the four menu options provided
+    by the team's current IO_Manager.py.
+    """
+
+    print("\n==============================================")
+    print("   CAMPUS SAFETY HAZARD REPORTING SYSTEM")
+    print("==============================================")
+
+    print(
+        "System initialized successfully."
+    )
+
+    while True:
+
+        try:
+
+            # Display validated menu from I/O Manager
+            choice = IO_Manager.display_menu()
+
+            # OPTION 1: SUBMIT REPORT
+            if choice == "1":
+
+                submit_hazard_report()
+
+            # OPTION 2: VIEW INCIDENTS
+            elif choice == "2":
+
+                view_all_incidents()
+
+            # OPTION 3: TOP FIVE HAZARDS
+            elif choice == "3":
+
+                view_top_five_hazards()
+
+            # OPTION 4: EXIT
+            elif choice == "4":
+
+                print(
+                    "\nExiting Campus Safety Hazard "
+                    "Reporting System. Goodbye!"
+                )
+                break
+
+            else:
+
+                print(
+                    "\n[Error] Invalid menu option."
+                )
+
+        except KeyboardInterrupt:
+
+            print(
+                "\n\n[Notice] Application interrupted by user."
+            )
+            break
+
+        except EOFError:
+
+            print(
+                "\n[Notice] Input stream closed."
+            )
+            break
+
+        except Exception as error:
+
+            logger.exception(
+                "Unexpected application error: %s",
+                error
+            )
+
+            print(
+                "\n[Error] An unexpected error occurred. "
+                "Please review the error log."
+            )
+
+
+# ============================================================
+# APPLICATION ENTRY POINT
+# ============================================================
 
 if __name__ == "__main__":
     main()
