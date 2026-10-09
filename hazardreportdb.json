@@ -1,0 +1,44 @@
+[
+    {
+        "reporter_name": "dkoh",
+        "reporter_contact": "92834940",
+        "location": "sit",
+        "impact_headcount": 50,
+        "asset_info": "aircon leak",
+        "description": "aircon leaking in room 2 level 3"
+    },
+    {
+        "reporter_name": "d koh",
+        "reporter_contact": "92849930",
+        "location": "Block E2 L3",
+        "impact_headcount": 40,
+        "asset_info": "aircon leak",
+        "description": "aircon leaking at block E2 Level 3 classroom"
+    },
+    {
+        "reporter_name": "d koh",
+        "reporter_contact": "87566885",
+        "location": "sit",
+        "impact_headcount": 40,
+        "asset_info": "window handle broken",
+        "description": "unable to close and open window"
+    },
+    {
+        "reporter_name": "ben",
+        "reporter_contact": "90584803",
+        "location": "MPH 2",
+        "impact_headcount": 60,
+        "asset_info": "Wet floor",
+        "description": "wet floor outside MPH level 2",
+        "image_patch": "uploads/RulesofInference (1).png"
+    },
+    {
+        "reporter_name": "dkoh",
+        "reporter_contact": "98379320",
+        "location": "mph 2",
+        "impact_headcount": 50,
+        "asset_info": "aircon spoil",
+        "description": "aircon spoil which affects 50 people",
+        "image_patch": "uploads/RulesofInference (1).png"
+    }
+]
