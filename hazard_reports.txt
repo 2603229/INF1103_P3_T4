@@ -1,0 +1,123 @@
+============================================================
+CAMPUS SAFETY HAZARD REPORTING SYSTEM
+INCIDENT MANAGEMENT REPORT
+============================================================
+
+Total Incidents: 3
+
+------------------------------------------------------------
+Incident ID         : INCIDENT-001
+Reported Date       : 2026-10-09 16:49:16
+Status              : Pending Review
+Reporter Name       : khun
+Reporter Contact    : 12344@sit.singaporetech.edu.sg
+Location            : e6
+Affected Headcount  : 12
+Asset Information   : aircon leak
+
+Description:
+water dripping from ac
+
+--- AI RISK ASSESSMENT ---
+Assessment Source   : Gemini AI
+Category            : HVAC
+Severity            : Low
+Operational Impact  : Minor
+
+Risk Summary:
+• Water dripping from AC unit at location E6
+• Potential slip hazard for 12 impacted occupants
+• Risk of minor water damage to surrounding area/property
+
+Contextual Insights:
+AC leaks are commonly caused by clogged condensate drain lines, improper installation, or frozen coils. While the operational impact is minor, stagnant water can create slip hazards and risk property or ceiling damage if left unaddressed. Facilities should clear the drain line and ensure electrical components beneath or near the leak are safely isolated.
+
+--- PRIORITY AND ROUTING ---
+Historical Frequency: 0
+Duplicate Check     : Unique
+Priority Score      : 3
+Final Priority      : Normal
+Recommended Action  : Standard Maintenance
+Escalation Reason   : Hazard does not meet the criteria for urgent escalation.
+Assigned Route      : Standard Maintenance Queue
+
+------------------------------------------------------------
+
+------------------------------------------------------------
+Incident ID         : INCIDENT-002
+Reported Date       : 2026-10-09 16:55:43
+Status              : Pending Review
+Reporter Name       : khun
+Reporter Contact    : 93434343
+Location            : e2 lev 3
+Affected Headcount  : 20
+Asset Information   : window cracked
+
+Description:
+visible cracks can be seen on the glass pane
+
+--- AI RISK ASSESSMENT ---
+Assessment Source   : Gemini AI
+Category            : Structural
+Severity            : Medium
+Operational Impact  : Moderate
+
+Risk Summary:
+• Visible cracks identified on a window glass pane at E2 Level 3.
+• Risk of complete glass failure resulting in sharp falling debris and laceration hazards.
+• Potential safety hazard impacting up to 20 individuals in the vicinity.
+
+Contextual Insights:
+A cracked window glass pane in a populated space (impact headcount of 20) poses a risk of shattering due to wind pressure or thermal stress. The affected area should be immediately cordoned off to prevent injury from falling glass, and maintenance should schedule a prompt replacement. Note: The provided image depicts a graded trading card slab, which appears to be unrelated to the reported physical window hazard.
+
+--- PRIORITY AND ROUTING ---
+Historical Frequency: 0
+Duplicate Check     : Unique
+Priority Score      : 4
+Final Priority      : Normal
+Recommended Action  : Standard Maintenance
+Escalation Reason   : Hazard does not meet the criteria for urgent escalation.
+Assigned Route      : Standard Maintenance Queue
+
+------------------------------------------------------------
+
+------------------------------------------------------------
+Incident ID         : INCIDENT-003
+Reported Date       : 2026-10-09 17:11:05
+Status              : Pending Review
+Reporter Name       : jerry
+Reporter Contact    : 97392833
+Location            : e6
+Affected Headcount  : 34
+Asset Information   : socket cover open
+
+Description:
+electrical hazard
+
+--- AI RISK ASSESSMENT ---
+Assessment Source   : Offline Fallback
+Category            : Electrical / Infrastructure
+Severity            : Critical
+Operational Impact  : Severe
+
+Risk Summary:
+- [Offline Assessment] Visual evidence requires physical inspection
+- Potential physical safety hazard to occupants
+
+Contextual Insights:
+Visual evidence indicates potential compromised physical asset integrity. Cordon off the area and dispatch maintenance for inspection.
+
+--- PRIORITY AND ROUTING ---
+Historical Frequency: 0
+Duplicate Check     : Unique
+Priority Score      : 10
+Final Priority      : Critical
+Recommended Action  : Immediate Emergency Dispatch
+Escalation Reason   : Critical severity combined with severe operational impact.
+Assigned Route      : Urgent Emergency Dispatch
+
+------------------------------------------------------------
+
+============================================================
+END OF INCIDENT MANAGEMENT REPORT
+============================================================

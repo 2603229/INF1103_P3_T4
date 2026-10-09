@@ -9,7 +9,7 @@ Handles:
 2. Incident ID generation
 3. Searching and updating incidents
 4. Deleting and clearing incidents
-5. Exporting incidents to CSV
+5. Exporting incidents to CSV and TXT
 
 Every incident is stored as ONE complete record containing:
     - the reporter's input,
@@ -535,16 +535,134 @@ def export_incidents_to_csv(
 
 
 # ============================================================
-# COMPATIBILITY FUNCTION
+# EXPORT INCIDENTS TO TXT
 # ============================================================
 
 def export_incidents_to_txt(
-    filename: str = "hazard_reports.csv"
+    filename: str = "hazard_reports.txt"
 ) -> bool:
     """
-    Compatibility wrapper for older integrations.
+    Exports all incident records into a readable TXT report.
 
-    Exports CSV data using the supplied filename.
+    Includes reporter details, AI assessment, priority
+    decisions, routing information, and incident status.
+
+    Returns:
+        bool: True if export succeeds, otherwise False.
     """
 
-    return export_incidents_to_csv(filename)
+    records = load()
+
+    if last_load_warning or not records:
+        return False
+
+    file_path = os.path.join(
+        get_data_dir(),
+        filename
+    )
+
+    try:
+        os.makedirs(
+            os.path.dirname(os.path.abspath(file_path)),
+            exist_ok=True
+        )
+
+        with open(
+            file_path,
+            "w",
+            encoding="utf-8"
+        ) as file:
+
+            file.write("=" * 60 + "\n")
+            file.write("CAMPUS SAFETY HAZARD REPORTING SYSTEM\n")
+            file.write("INCIDENT MANAGEMENT REPORT\n")
+            file.write("=" * 60 + "\n\n")
+
+            file.write(f"Total Incidents: {len(records)}\n\n")
+
+            for record in records:
+                file.write("-" * 60 + "\n")
+
+                fields = [
+                    ("Incident ID", "incident_id"),
+                    ("Reported Date", "timestamp"),
+                    ("Status", "status"),
+                    ("Reporter Name", "reporter_name"),
+                    ("Reporter Contact", "reporter_contact"),
+                    ("Location", "location"),
+                    ("Affected Headcount", "impact_headcount"),
+                    ("Asset Information", "asset_info"),
+                ]
+
+                for label, key in fields:
+                    value = record.get(key)
+                    if value is None or value == "":
+                        value = "N/A"
+                    file.write(f"{label:<20}: {value}\n")
+
+                file.write("\nDescription:\n")
+                file.write(
+                    f"{record.get('description') or 'N/A'}\n"
+                )
+
+                file.write("\n--- AI RISK ASSESSMENT ---\n")
+
+                ai_fields = [
+                    ("Assessment Source", "assessment_source"),
+                    ("Category", "category"),
+                    ("Severity", "severity"),
+                    ("Operational Impact", "operational_impact"),
+                ]
+
+                for label, key in ai_fields:
+                    file.write(
+                        f"{label:<20}: {record.get(key) or 'N/A'}\n"
+                    )
+
+                file.write("\nRisk Summary:\n")
+                file.write(
+                    f"{record.get('risk_summary') or 'N/A'}\n"
+                )
+
+                file.write("\nContextual Insights:\n")
+                file.write(
+                    f"{record.get('contextual_insights') or 'N/A'}\n"
+                )
+
+                file.write("\n--- PRIORITY AND ROUTING ---\n")
+
+                priority_fields = [
+                    ("Historical Frequency", "historical_frequency"),
+                    ("Duplicate Check", "is_duplicate"),
+                    ("Priority Score", "priority_score"),
+                    ("Final Priority", "final_priority"),
+                    ("Recommended Action", "recommended_action"),
+                    ("Escalation Reason", "escalation_reason"),
+                    ("Assigned Route", "assigned_route"),
+                ]
+
+                for label, key in priority_fields:
+                    value = record.get(key)
+                    if value is None or value == "":
+                        value = "N/A"
+                    file.write(f"{label:<20}: {value}\n")
+
+                file.write("\n" + "-" * 60 + "\n\n")
+
+            file.write("=" * 60 + "\n")
+            file.write("END OF INCIDENT MANAGEMENT REPORT\n")
+            file.write("=" * 60 + "\n")
+
+        logger.info(
+            "TXT report exported successfully: %s",
+            file_path
+        )
+
+        return True
+
+    except (OSError, ValueError) as error:
+        logger.error(
+            "TXT export failed: %s",
+            error
+        )
+        return False

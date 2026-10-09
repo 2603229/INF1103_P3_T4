@@ -119,7 +119,7 @@ def run_ai_assessment(
     """
 
     try:
-        ai_result = process_record(record)
+        ai_result: Any = process_record(record)
 
     except Exception as error:
 
