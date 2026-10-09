@@ -194,3 +194,52 @@ with right:
         st.image(image_path, caption="Visual evidence")
     else:
         st.caption(f"No image found at: {image_path or 'not provided'}")
+
+# ---- Manage incident ----
+st.divider()
+st.markdown("### Manage incident")
+status_col, delete_col = st.columns(2)
+
+with status_col:
+    st.markdown("**Update status**")
+    current_status = incident.get("status") or STATUS_OPTIONS[0]
+
+    # Keep any custom status already in the database selectable
+    status_choices = STATUS_OPTIONS if current_status in STATUS_OPTIONS else [current_status] + STATUS_OPTIONS
+
+    new_status = st.selectbox(
+        "New status",
+        status_choices,
+        index=status_choices.index(current_status),
+        key=f"status_{incident_id}",
+    )
+
+    if st.button(
+        "Update status",
+        key=f"update_{incident_id}",
+        disabled=new_status == current_status,
+    ):
+        if update_incident_status(incident_id, new_status):
+            set_flash("success", f"{incident_id} status changed from '{current_status}' to '{new_status}'.")
+        else:
+            set_flash("error", f"Couldn't update {incident_id}. Check the database file.")
+        st.rerun()
+
+with delete_col:
+    st.markdown("**Delete incident**")
+    confirm_delete = st.checkbox(
+        f"I understand {incident_id} will be permanently deleted",
+        key=f"confirm_delete_{incident_id}",
+    )
+
+    if st.button(
+        "Delete incident",
+        type="primary",
+        key=f"delete_{incident_id}",
+        disabled=not confirm_delete,
+    ):
+        if delete_incident_by_id(incident_id):
+            set_flash("success", f"{incident_id} was deleted.")
+        else:
+            set_flash("error", f"Couldn't delete {incident_id}. It may already be gone.")
+        st.rerun()
