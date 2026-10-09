@@ -14,7 +14,6 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.environ.get("INCIDENTS_DB", os.path.join(BASE_DIR, "hazardreportdb.json"))
 EMPTY_VALUES = {None, "", "None", "none", "null"}
 
-
 STATUS_OPTIONS = ["Pending Review", "In Progress", "Resolved", "Closed"]
 CSV_FILENAME = "hazard_reports.csv"
 TXT_FILENAME = "hazard_reports.txt"
@@ -31,6 +30,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.title("Facilities incident management")
+
+# ---- Feedback messages that survive st.rerun() ----
+def set_flash(kind, message):
+    st.session_state["flash"] = (kind, message)
+
+
+flash = st.session_state.pop("flash", None)
+if flash:
+    kind, message = flash
+    if kind == "success":
+        st.success(message)
+    else:
+        st.error(message)
+
 
 # ---- Load data ----
 if not os.path.exists(DATA_FILE):
