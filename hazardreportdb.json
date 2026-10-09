@@ -31,5 +31,14 @@
         "asset_info": "Wet floor",
         "description": "wet floor outside MPH level 2",
         "image_patch": "uploads/RulesofInference (1).png"
+    },
+    {
+        "reporter_name": "dkoh",
+        "reporter_contact": "98379320",
+        "location": "mph 2",
+        "impact_headcount": 50,
+        "asset_info": "aircon spoil",
+        "description": "aircon spoil which affects 50 people",
+        "image_patch": "uploads/RulesofInference (1).png"
     }
 ]
