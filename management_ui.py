@@ -2,9 +2,22 @@ import json
 import os
 import streamlit as st
 
+from Data_Manager import (
+    update_incident_status,
+    delete_incident_by_id,
+    export_incidents_to_csv,
+    export_incidents_to_txt,
+    get_data_dir,
+)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATA_FILE = os.environ.get("INCIDENTS_DB", os.path.join(BASE_DIR, "hazardreportdb.json"))
 EMPTY_VALUES = {None, "", "None", "none", "null"}
+
+
+STATUS_OPTIONS = ["Pending Review", "In Progress", "Resolved", "Closed"]
+CSV_FILENAME = "hazard_reports.csv"
+TXT_FILENAME = "hazard_reports.txt"
 
 st.set_page_config(page_title="Incident Management", layout="wide")
 st.markdown(
