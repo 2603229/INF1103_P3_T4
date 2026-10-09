@@ -119,21 +119,34 @@ with txt_col:
 st.divider()
 
 # ---- Incident picker ----
-def format_incident_label(incident):
-    incident_id = incident.get("incident_id")
+
+
+incidents_by_id = {i.get("incident_id"): i for i in incidents}
+
+
+def format_incident_label(incident_id):
+    incident = incidents_by_id[incident_id]
     asset = incident.get("asset_info", "")
     priority = incident.get("final_priority", "")
     score = incident.get("priority_score", "-")
     return f"{incident_id} — {asset} ({priority}, score {score})"
 
+
+# If the previously selected incident was deleted, fall back to the first one
+if st.session_state.get("selected_incident_id") not in incidents_by_id:
+    st.session_state.pop("selected_incident_id", None)
+
 st.markdown("### Select an incident to view")
 
-incident = st.selectbox(
+selected_id = st.selectbox(
     "Select an incident to view",
-    incidents,
+    list(incidents_by_id),
     format_func=format_incident_label,
+    key="selected_incident_id",
     label_visibility="collapsed",
 )
+incident = incidents_by_id[selected_id]
+incident_id = incident["incident_id"]
 
 # ---- Incident detail ----
 st.subheader(f"{incident['incident_id']} · {incident.get('asset_info', '')}")
