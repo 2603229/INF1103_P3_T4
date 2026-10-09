@@ -559,9 +559,11 @@ def main() -> None:
     Main application controller.
     """
 
-    subprocess.Popen([ 
-    sys.executable, "-m", "streamlit", "run", "management_ui.py" 
-    ])
+    subprocess.Popen(
+    [sys.executable, "-m", "streamlit", "run", "management_ui.py"],
+    stdout=subprocess.DEVNULL,
+    stderr=subprocess.DEVNULL,
+    )
 
     print("\n==============================================")
     print("   CAMPUS SAFETY HAZARD REPORTING SYSTEM")
