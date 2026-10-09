@@ -329,3 +329,4 @@ def sort_incidents_by_severity(
             4
         )
     )
+
