@@ -1,0 +1,5 @@
+# Environment variables and secret keys (Keep private)
+.env
+
+# Python compiled bytecode / cache files
+__pycache__/
