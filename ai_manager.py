@@ -1,8 +1,10 @@
 """
 Module Name: ai_manager.py
 Purpose: Connects to Google Gemini using the official google-genai SDK,
-         with automated fallback for 429 rate limits, 503 network congestion,
-         and a 300-second timeout for multimodal image uploads with strict type annotations.
+         with automated fallback for 429 rate limits and 503 service errors,
+         and a 300-second wait limit for API responses.
+         Running requests may continue beyond this limit.
+         Uses strict type annotations.
 """
 
 import json
@@ -98,8 +100,10 @@ def build_prompt(record: dict[str, Any]) -> str:
 def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
     """
     Sends the prompt to Gemini using the official Google GenAI SDK client,
-    featuring a multi-model fallback cascade, retry backoffs for 429/503 errors,
-    and a 300-second execution timeout.
+    featuring a multi-model fallback cascade and retry handling for 429/503 errors.
+
+    Waits up to 300 seconds for the API result, but the executor may continue
+    waiting for a running request after the timeout is reached.
     """
     # 1. Verify that the Gemini API key is configured in the environment variables
     api_key = os.environ.get("GEMINI_API_KEY")
