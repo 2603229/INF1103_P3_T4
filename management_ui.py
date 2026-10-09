@@ -3,7 +3,7 @@ import os
 import streamlit as st
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = os.environ.get("INCIDENTS_DB", os.path.join(BASE_DIR, "incidents_database.json"))
+DATA_FILE = os.environ.get("INCIDENTS_DB", os.path.join(BASE_DIR, "ai_assessments.json"))
 EMPTY_VALUES = {None, "", "None", "none", "null"}
 
 st.set_page_config(page_title="Incident Management", layout="wide")
