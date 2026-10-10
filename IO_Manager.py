@@ -2,11 +2,17 @@
 import re
 import os
 import shutil
-import tkinter as tk
+import uuid
 
 from typing import Any
 from collections import Counter
-from tkinter import filedialog
+
+try:
+    import tkinter as tk
+    from tkinter import filedialog
+except ImportError:
+    tk = None
+    filedialog = None
 
 
 # ERROR HANDLING for JSON file path
@@ -241,53 +247,98 @@ def view_frequent_hazards(
     for rank, (hazard, count) in enumerate(top_hazards, start=1):
         print(f"{rank:<6} | {hazard:<28} | {count:<10}")
 
-# OPTIONAL : allows the user to upload an image of the hazard
 def select_image_via_dialog() -> str:
-    """Opens a native OS file picker window allowing the user to select an image.
-
-    Copies the chosen image to the project's 'uploads/' folder and returns the
-    relative path string for JSON storage.
     """
-    # Create the uploads folder inside the project directory if it doesn't exist
-    upload_dir = os.path.join(BASE_DIR, "uploads")
-    os.makedirs(upload_dir, exist_ok=True)
+    Allows users to attach an optional hazard image.
 
-    print("\nOpening file picker window... Please select an image file.")
+    Uses a graphical file picker when available.
+    Falls back to terminal path input in headless environments.
+    Validates supported formats and copies the selected image
+    into the project's uploads directory.
+    """
 
-    # Initialize tkinter root window and hide the main Tk background window
-    ## It uses Python's tkinter.filedialog module to pop up a native OS file selection window (Windows Explorer or macOS Finder) over your terminal.
-    root = tk.Tk()
-    root.withdraw()
-    root.attributes("-topmost", True)  # Bring window to front above terminal
-            
-    # Open OS File Selection Dialog (Filters for common image extensions)
-    file_path = filedialog.askopenfilename(
-        title="Select Hazard Image",
-        filetypes=[
-            ("Image Files", "*.png *.jpg *.jpeg *.gif *.bmp *.webp"),
-            ("All Files", "*.*"),
-        ],
-    )
+    file_path = ""
+    use_terminal_input = tk is None or filedialog is None
 
-    # Destroy tkinter instance after file selection
-    root.destroy()
+    # Step 1: Open graphical image picker if available
+    if not use_terminal_input:
+        root = None
 
-    ## If the user closes/cancels the file picker window without selecting a file, it prints a message and returns an empty string "".
+        try:
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+
+            file_path = filedialog.askopenfilename(
+                title="Select Hazard Image",
+                filetypes=[
+                    ("Supported Images", "*.png *.jpg *.jpeg *.webp")
+                ]
+            )
+
+        except (tk.TclError, OSError):
+            print(
+                "[Info] Graphical file picker unavailable. "
+                "Switching to terminal input."
+            )
+            use_terminal_input = True
+
+        finally:
+            if root is not None:
+                try:
+                    root.destroy()
+                except (tk.TclError, OSError):
+                    pass
+
+    # Step 2: Allow terminal input if GUI is unavailable
+    if use_terminal_input:
+        file_path = input(
+            "Enter image file path (or press Enter to skip): "
+        ).strip().strip('"')
+
+    # Step 3: Handle cancelled or skipped selection
     if not file_path:
         print("[Info] No image selected. Continuing without image.")
         return ""
 
-    # Copy selected file into the local 'uploads/' folder
-    filename = os.path.basename(file_path)
-    destination = os.path.join(upload_dir, filename)
+    # Step 4: Validate file existence
+    if not os.path.isfile(file_path):
+        print("[Error] Selected image file does not exist.")
+        return ""
+
+    # Step 5: Validate supported image formats
+    allowed_extensions = (".png", ".jpg", ".jpeg", ".webp")
+
+    if os.path.splitext(file_path)[1].lower() not in allowed_extensions:
+        print(
+            "[Error] Unsupported image format. "
+            "Please select PNG, JPG, JPEG, or WebP."
+        )
+        return ""
+
+    # Step 6: Copy image to uploads directory
+    upload_dir = os.path.join(BASE_DIR, "uploads")
 
     try:
-        shutil.copy(file_path, destination)
-        print(f"Image attached and saved to: uploads/{filename}")
-        return f"uploads/{filename}"
-    except Exception as e:
-        print(f"Error copying image file: {e}")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        # Unique filename prevents overwriting existing images
+        filename = f"{uuid.uuid4().hex}_{os.path.basename(file_path)}"
+
+        destination = os.path.join(upload_dir, filename)
+
+        shutil.copy2(file_path, destination)
+
+        relative_path = f"uploads/{filename}"
+
+        print(f"[Success] Image attached: {relative_path}")
+
+        return relative_path
+
+    except (OSError, shutil.Error) as error:
+        print(f"[Error] Unable to attach image: {error}")
         return ""
+
 
 def display_priority_calculation(
     record: dict[str, Any], decision: dict[str, Any]
