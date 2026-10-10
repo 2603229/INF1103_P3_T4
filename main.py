@@ -153,101 +153,6 @@ def run_ai_assessment(
 
     return ai_result, "Gemini AI"
 
-
-# ============================================================
-# DISPLAY FINAL INCIDENT RESULT
-# ============================================================
-
-def display_incident_result(
-    record: dict[str, Any]
-) -> None:
-    """
-    Displays the completed hazard report
-    and its AI/logic assessment.
-    """
-
-    IO_Manager.view_all_reports([record])
-
-    print("\n========== AI RISK ASSESSMENT ==========")
-
-    print(
-        "Incident ID:",
-        record.get("incident_id", "N/A")
-    )
-
-    print(
-        "Category:",
-        record.get("category", "N/A")
-    )
-
-    print(
-        "Severity:",
-        record.get("severity", "N/A")
-    )
-
-    print(
-        "Operational Impact:",
-        record.get("operational_impact", "N/A")
-    )
-
-    print(
-        "Risk Summary:",
-        record.get("risk_summary", "N/A")
-    )
-
-    print(
-        "Contextual Insights:",
-        record.get("contextual_insights", "N/A")
-    )
-
-    print(
-        "Assessment Source:",
-        record.get("assessment_source", "N/A")
-    )
-
-    print(
-        "Historical Frequency:",
-        record.get("historical_frequency", 0)
-    )
-
-    print(
-        "Priority Score:",
-        record.get("priority_score", "N/A")
-    )
-
-    print(
-        "Final Priority:",
-        record.get("final_priority", "N/A")
-    )
-
-    print(
-        "Recommended Action:",
-        record.get("recommended_action", "N/A")
-    )
-
-    print(
-        "Escalation Reason:",
-        record.get("escalation_reason", "N/A")
-    )
-
-    print(
-        "Assigned Route:",
-        record.get("assigned_route", "N/A")
-    )
-
-    print(
-        "Duplicate Check:",
-        record.get("is_duplicate", "N/A")
-    )
-
-    print(
-        "Status:",
-        record.get("status", "N/A")
-    )
-
-    print("========================================")
-
-
 # ============================================================
 # OPTION 1: SUBMIT NEW HAZARD REPORT
 # ============================================================
@@ -259,9 +164,7 @@ def submit_hazard_report() -> None:
     IO -> AI -> Logic -> Data
     """
 
-    print("\n==============================================")
-    print("          NEW HAZARD REPORT WORKFLOW")
-    print("==============================================")
+    IO_Manager.display_workflow_header()
 
     # --------------------------------------------------------
     # STEP 1: COLLECT USER INPUT
@@ -271,11 +174,15 @@ def submit_hazard_report() -> None:
         record = IO_Manager.get_user_input()
 
     except (KeyboardInterrupt, EOFError):
-        print("\n[Notice] Report submission cancelled.")
+        IO_Manager.display_message(
+            "\n[Notice] Report submission cancelled."
+        )
         return
 
     if not isinstance(record, dict):
-        print("[Error] Invalid report information.")
+        IO_Manager.display_message(
+            "[Error] Invalid report information."
+        )
         return
 
     # --------------------------------------------------------
@@ -292,12 +199,11 @@ def submit_hazard_report() -> None:
 
     if Data_Manager.last_load_warning:
 
-        print(
-            "[Warning]",
-            Data_Manager.last_load_warning
-        )
+        IO_Manager.display_message(
+            f"[Warning] {Data_Manager.last_load_warning}"
+)
 
-        print(
+        IO_Manager.display_message(
             "[Error] Submission stopped to protect "
             "the existing database."
         )
@@ -308,7 +214,9 @@ def submit_hazard_report() -> None:
     # STEP 4: AI ASSESSMENT
     # --------------------------------------------------------
 
-    print("\n[Processing] Analysing hazard report...")
+    IO_Manager.display_message(
+    "\n[Processing] Analysing hazard report..."
+)
 
     ai_result, assessment_source = run_ai_assessment(record)
 
@@ -352,7 +260,7 @@ def submit_hazard_report() -> None:
             error
         )
 
-        print(
+        IO_Manager.display_message(
             "[Error] Unable to evaluate hazard priority."
         )
 
@@ -383,79 +291,13 @@ def submit_hazard_report() -> None:
     # STEP 9: PRE-SUBMISSION SUMMARY
     # --------------------------------------------------------
 
-    print("\n========== PRE-SUBMISSION SUMMARY ==========")
-
-    print(
-        "Location:",
-        record.get("location", "N/A")
-    )
-
-    print(
-        "Hazard:",
-        record.get("asset_info", "N/A")
-    )
-
-    print(
-        "Category:",
-        record.get("category", "N/A")
-    )
-
-    print(
-        "Severity:",
-        record.get("severity", "N/A")
-    )
-
-    print(
-        "Operational Impact:",
-        record.get("operational_impact", "N/A")
-    )
-
-    print(
-        "AI Assessment Source:",
-        assessment_source
-    )
-
-    print(
-        "Priority:",
-        record.get("final_priority", "N/A")
-    )
-
-    print(
-        "Recommended Action:",
-        record.get("recommended_action", "N/A")
-    )
-
-    print(
-        "Duplicate Check:",
-        record.get("is_duplicate", "N/A")
-    )
-
-    print("============================================")
+    IO_Manager.display_pre_submission_summary(record)
 
     # --------------------------------------------------------
     # STEP 10: CONFIRM SUBMISSION
     # --------------------------------------------------------
 
-    while True:
-
-        try:
-            confirmation = input(
-                "\nConfirm hazard report submission? (y/n): "
-            ).strip().lower()
-
-        except (KeyboardInterrupt, EOFError):
-
-            print("\n[Notice] Submission cancelled.")
-            return
-
-        if confirmation in ("y", "yes", "n", "no"):
-            break
-
-        print("[Error] Please enter y or n.")
-
-    if confirmation in ("n", "no"):
-
-        print("\n[Notice] Submission cancelled.")
+    if not IO_Manager.confirm_submission():
         return
 
     # --------------------------------------------------------
@@ -469,35 +311,26 @@ def submit_hazard_report() -> None:
         success = Data_Manager.save(record)
 
     except Exception as error:
-
         logger.error(
             "Incident database save failed: %s",
             error
         )
-
         success = False
 
     if not success:
-
-        print("\n[Error] Failed to save hazard report.")
+        IO_Manager.display_message(
+            "\n[Error] Failed to save hazard report."
+        )
         return
 
-    print(
-        "\n[Success] Hazard report and AI assessment "
-        "saved to hazardreportdb.json!"
-    )
+    IO_Manager.display_submission_success(record)
 
-    print(
-        "Incident ID:",
-        record.get("incident_id", "N/A")
-    )
 
     # --------------------------------------------------------
     # STEP 12: DISPLAY FINAL RESULT
     # --------------------------------------------------------
 
-    display_incident_result(record)
-
+    IO_Manager.display_incident_result(record)
 
 # ============================================================
 # OPTION 2: VIEW ALL INCIDENTS
@@ -511,17 +344,15 @@ def view_all_incidents() -> None:
     records = Data_Manager.load()
 
     if Data_Manager.last_load_warning:
-
-        print(
-            "[Warning]",
-            Data_Manager.last_load_warning
+        IO_Manager.display_message(
+            f"[Warning] {Data_Manager.last_load_warning}"
         )
-
         return
 
     if not records:
-
-        print("\n[Notice] No hazard reports found.")
+        IO_Manager.display_message(
+            "\n[Notice] No hazard reports found."
+        )
         return
 
     sorted_records = sort_incidents_by_severity(records)
@@ -541,12 +372,9 @@ def view_top_five_hazards() -> None:
     records = Data_Manager.load()
 
     if Data_Manager.last_load_warning:
-
-        print(
-            "[Warning]",
-            Data_Manager.last_load_warning
+        IO_Manager.display_message(
+            f"[Warning] {Data_Manager.last_load_warning}"
         )
-
         return
 
     IO_Manager.view_frequent_hazards(
@@ -573,11 +401,9 @@ def main() -> None:
         stderr=subprocess.DEVNULL,
     )
 
-    print("\n==============================================")
-    print("   CAMPUS SAFETY HAZARD REPORTING SYSTEM")
-    print("==============================================")
-
-    print("System initialized successfully.")
+    IO_Manager.display_message(
+        "System initialized successfully."
+)
 
     try:
         while True:
@@ -598,21 +424,21 @@ def main() -> None:
 
                 # OPTION 4: EXIT
                 elif choice == "4":
-                    print(
+                    IO_Manager.display_message(
                         "\nExiting Campus Safety Hazard "
                         "Reporting System. Goodbye!"
                     )
                     break
 
                 else:
-                    print("\n[Error] Invalid menu option.")
+                    IO_Manager.display_message("\n[Error] Invalid menu option.")
 
             except KeyboardInterrupt:
-                print("\n[Notice] Application interrupted.")
+                IO_Manager.display_message("\n[Notice] Application interrupted.")
                 break
 
             except EOFError:
-                print("\n[Notice] Input stream closed.")
+                IO_Manager.display_message("\n[Notice] Input stream closed.")
                 break
 
             except Exception as error:
@@ -621,7 +447,7 @@ def main() -> None:
                     error
                 )
 
-                print("\n[Error] An unexpected error occurred.")
+                IO_Manager.display_message("\n[Error] An unexpected error occurred.")
 
     finally:
         # Stop Streamlit when the CLI application exits
@@ -635,7 +461,9 @@ def main() -> None:
                 streamlit_proc.kill()
                 streamlit_proc.wait()
 
-        print("[Info] Application shutdown completed.")
+        IO_Manager.display_message(
+    "[Info] Application shutdown completed."
+)
 
 
 # ============================================================
