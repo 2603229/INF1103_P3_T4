@@ -235,18 +235,27 @@ def evaluate(record: dict[str, Any]) -> dict[str, Any]:
         "score": priority_score,
         "action": action,
         "reason": reason,
-        "route": route(priority),
+        "route": route({"priority": priority}),
         "score_breakdown": breakdown
     }
 
 
-def route(priority: str) -> str:
+def route(record: dict[str, Any]) -> str:
     """
     Determines the dispatch queue based on
-    the final evaluated hazard priority.
+    the evaluated hazard priority.
+
+    Args:
+        record (dict[str, Any]): A dictionary containing
+            the evaluated priority.
+
+    Returns:
+        str: The appropriate dispatch queue.
     """
 
-    priority = str(priority).strip().lower()
+    priority = str(
+        record.get("priority", "Normal")
+    ).strip().lower()
 
     if priority == "critical":
         return "Urgent Emergency Dispatch"
@@ -255,7 +264,6 @@ def route(priority: str) -> str:
         return "Priority Maintenance Queue"
 
     return "Standard Maintenance Queue"
-
 
 
 def check_duplicate(
