@@ -1,5 +1,23 @@
-# Environment variables and secret keys (Keep private)
+# Environment variables and API keys
 .env
+.env.*
+!.env.example
 
-# Python compiled bytecode / cache files
+# Python cache files
 __pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Incident database and exports
+hazardreportdb.json
+hazard_reports.csv
+hazard_reports.txt
+
+# Uploaded images
+uploads/
+
+# Temporary files
+*.tmp
