@@ -1,15 +1,11 @@
 # Import module statements
-from ast import If
-from builtins import dict
 import re
-import json
 import os
-import base64
-from typing import Any, Optional
-from collections import Counter
-
 import shutil
 import tkinter as tk
+
+from typing import Any
+from collections import Counter
 from tkinter import filedialog
 
 
@@ -18,37 +14,6 @@ from tkinter import filedialog
 ## With BASE_DIR: No matter where the terminal is launch from, DB_FILE will always point 
 ## directly inside the folder where the script lives to ensure that it is accessing the write folder.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, "hazardreportdb.json")
-
-
-# ==============================================================================
-# JSON DATABASE HELPER FUNCTIONS
-# ==============================================================================
-def load_reports() -> list[dict[str, Any]]:
-    """Loads reports from the JSON database file.
-
-    Returns an empty list if the file doesn't exist or is empty.
-    """
-    if not os.path.exists(DB_FILE):
-        return []
-
-    try:
-        with open(DB_FILE, "r", encoding="utf-8") as file:
-            data = json.load(file)
-            return data if isinstance(data, list) else []
-    except (json.JSONDecodeError, FileNotFoundError):
-        # File is empty or improperly formatted
-        return []
-    
-
-def save_reports(reports: list[dict[str, Any]]) -> None:
-    """Saves the list of hazard reports to the JSON database file."""
-    try:
-        with open(DB_FILE, "w", encoding="utf-8") as file:
-            json.dump(reports, file, indent=4)
-        print(f"Data successfully saved to {DB_FILE}")
-    except Exception as e:
-        print(f"Error saving data to {DB_FILE}: {e}")
 
 # Display main menu
 def display_menu() -> str:
@@ -351,43 +316,105 @@ def display_priority_calculation(
     print(f"Final Priority: {decision['priority']}")
     print("===============================================")
 
-    
-def main() -> None:
-    """Main execution loop for the Campus Safety Hazard Reporting System."""
-    # Load any existing reports from hazardreportdb.json upon startup
-    hazard_reports = load_reports()
+
+# ============================================================
+# TERMINAL DISPLAY AND SUBMISSION FUNCTIONS
+# ============================================================
+
+def display_message(message: str) -> None:
+    """Displays an application message in the terminal."""
+    print(message)
+
+
+def display_workflow_header() -> None:
+    """Displays the new hazard report workflow header."""
+    print("\n==============================================")
+    print("          NEW HAZARD REPORT WORKFLOW")
+    print("==============================================")
+
+
+def display_pre_submission_summary(
+    record: dict[str, Any]
+) -> None:
+    """Displays hazard details before submission confirmation."""
+
+    print("\n========== PRE-SUBMISSION SUMMARY ==========")
+    print("Location:", record.get("location", "N/A"))
+    print("Hazard:", record.get("asset_info", "N/A"))
+    print("Category:", record.get("category", "N/A"))
+    print("Severity:", record.get("severity", "N/A"))
+    print("Operational Impact:", record.get("operational_impact", "N/A"))
+    print("AI Assessment Source:", record.get("assessment_source", "N/A"))
+    print("Priority:", record.get("final_priority", "N/A"))
+    print("Recommended Action:", record.get("recommended_action", "N/A"))
+    print("Duplicate Check:", record.get("is_duplicate", "N/A"))
+    print("============================================")
+
+
+def confirm_submission() -> bool:
+    """Asks the user to confirm or cancel the hazard submission."""
 
     while True:
-        selected_option = display_menu()
+        try:
+            confirmation = input(
+                "\nConfirm hazard report submission? (y/n): "
+            ).strip().lower()
 
-        if selected_option == "1":
-            # Collect user input for a new hazard report
-            user_data = get_user_input()
-            hazard_reports.append(user_data)
-            # Persist update directly to hazardreportdb.json
-            save_reports(hazard_reports)
-            # Print confirmation message after successful submission
-            print("\n✅ Hazard report successfully submitted!")
+        except (KeyboardInterrupt, EOFError):
+            print("\n[Notice] Submission cancelled.")
+            return False
 
-        elif selected_option == "2":
-            view_all_reports(hazard_reports)
+        if confirmation in ("y", "yes"):
+            return True
 
-        elif selected_option == "3":
-            view_frequent_hazards(hazard_reports)
+        if confirmation in ("n", "no"):
+            print("\n[Notice] Submission cancelled.")
+            return False
 
-        elif selected_option == "4":
-            print("\nExiting Campus Safety Hazard Reporting System. Goodbye!")
-            break
-
-        else:
-            print(
-                f"\nInvalid Option: '{selected_option}'. Please select a valid"
-                " menu option between 1 and 4."
-            )
+        print("[Error] Please enter y or n.")
 
 
-# Standard Python entry point
-## Import Safeguard: Keeping if __name__ == "__main__": main() at the very bottom ensures that if you import this script into another file 
-## (such as a testing module or web app), the CLI loop won't automatically execute on import.
-if __name__ == "__main__":
-    main()
+def display_submission_success(
+    record: dict[str, Any]
+) -> None:
+    """Displays confirmation after the incident is saved."""
+
+    print(
+        "\n[Success] Hazard report and AI assessment "
+        "saved to hazardreportdb.json!"
+    )
+
+    print("Incident ID:", record.get("incident_id", "N/A"))
+
+
+def display_incident_result(
+    record: dict[str, Any]
+) -> None:
+    """Displays the completed incident and its assessment."""
+
+    view_all_reports([record])
+
+    print("\n========== AI RISK ASSESSMENT ==========")
+
+    fields = (
+        ("Incident ID", "incident_id"),
+        ("Category", "category"),
+        ("Severity", "severity"),
+        ("Operational Impact", "operational_impact"),
+        ("Risk Summary", "risk_summary"),
+        ("Contextual Insights", "contextual_insights"),
+        ("Assessment Source", "assessment_source"),
+        ("Historical Frequency", "historical_frequency"),
+        ("Priority Score", "priority_score"),
+        ("Final Priority", "final_priority"),
+        ("Recommended Action", "recommended_action"),
+        ("Escalation Reason", "escalation_reason"),
+        ("Assigned Route", "assigned_route"),
+        ("Duplicate Check", "is_duplicate"),
+        ("Status", "status"),
+    )
+
+    for label, key in fields:
+        print(f"{label}: {record.get(key, 'N/A')}")
+
+    print("========================================")
