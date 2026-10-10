@@ -18,7 +18,7 @@ import os
 import logging
 import subprocess 
 import sys 
-from typing import Any
+from typing import Any, cast
 
 from dotenv import load_dotenv
 
@@ -139,7 +139,10 @@ def run_ai_assessment(
 
         return handle_ai_failure(record), "Offline Fallback"
 
-    if OFFLINE_MARKER in str(ai_result.get("risk_summary", "")):
+    ai_result = cast(dict[str, Any], ai_result)
+    risk_summary = str(ai_result.get("risk_summary", ""))
+
+    if OFFLINE_MARKER in risk_summary:
         return ai_result, "Offline Fallback"
 
     if not validate_response(ai_result):
@@ -179,7 +182,7 @@ def submit_hazard_report() -> None:
         )
         return
 
-    if not isinstance(record, dict):
+    if not record:
         IO_Manager.display_message(
             "[Error] Invalid report information."
         )
