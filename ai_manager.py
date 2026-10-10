@@ -1,20 +1,18 @@
 """
 Module Name: ai_manager.py
-Purpose: Connects to Google Gemini using the official google-genai SDK,
-         with automated fallback for 429 rate limits and 503 service errors,
-         and a 300-second wait limit for API responses.
-         Running requests may continue beyond this limit.
-         Uses strict type annotations.
+Purpose: Integrates Google Gemini for campus hazard assessment.
+         Supports multimodal image input, structured JSON validation,
+         HTTP request timeouts, retry handling, model fallback,
+         and controlled error handling.
 """
 
 import json
 import os
 import time
 import logging
-import concurrent.futures
 from typing import Any, Optional
 from google import genai
-from google.genai import types
+from google.genai import types, errors
 
 # Configure logging for status messages and errors.
 # Logging is used instead of print() to keep output consistent and controllable.
@@ -32,8 +30,8 @@ def encode_image(image_path: Optional[str]) -> tuple[Optional[bytes], Optional[s
         Returns:
             tuple: A 2-element tuple containing:
                 - bytes: The raw binary data of the image (or None if invalid).
-                - str: The detected MIME type ('image/png', 'image/webp', or defaults 
-                    to 'image/jpeg'), or None if processing failed.
+                - str: The detected MIME type for JPEG, PNG, or WebP,
+                    or None if processing failed.
     """
     if image_path is None:
         return None, None
@@ -46,12 +44,20 @@ def encode_image(image_path: Optional[str]) -> tuple[Optional[bytes], Optional[s
         return None, None
             
     ext = os.path.splitext(cleaned_path)[1].lower()
-    mime_type = "image/jpeg"
-    if ext == ".png":
-        mime_type = "image/png"
-    elif ext == ".webp":
-        mime_type = "image/webp"
-            
+
+    mime_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+    }
+
+    mime_type = mime_types.get(ext)
+
+    if mime_type is None:
+        logger.warning("Unsupported image format: %s", ext)
+        return None, None
+                
     try:
         with open(cleaned_path, "rb") as image_file:
             return image_file.read(), mime_type
@@ -63,7 +69,6 @@ def build_prompt(record: dict[str, Any]) -> str:
 
         Args:
             record (dict[str, Any]): A dictionary containing hazard details, expected to include:
-                - 'reporter_name' (str)
                 - 'location' (str)
                 - 'impact_headcount' (int/str)
                 - 'asset_info' (str)
@@ -89,7 +94,6 @@ def build_prompt(record: dict[str, Any]) -> str:
     - "contextual_insights": Explanations and safety insights.
 
     Input Data:
-    Reporter Name: {record.get('reporter_name')}
     Location: {record.get('location')}
     Impact Headcount: {record.get('impact_headcount')}
     Asset Information: {record.get('asset_info')}
@@ -97,100 +101,169 @@ def build_prompt(record: dict[str, Any]) -> str:
     """
     return prompt.strip()
 
-def call_api(prompt: str, visual_evidence_path: Optional[str] = None) -> str:
+def call_api(
+    prompt: str,
+    visual_evidence_path: Optional[str] = None
+) -> str:
     """
-    Sends the prompt to Gemini using the official Google GenAI SDK client,
-    featuring a multi-model fallback cascade and retry handling for 429/503 errors.
+    Sends a hazard report to Gemini using the official Google GenAI SDK.
 
-    Waits up to 300 seconds for the API result, but the executor may continue
-    waiting for a running request after the timeout is reached.
+    Supports HTTP timeouts, retry handling, model fallback,
+    optional image evidence, and JSON response validation.
     """
-    # 1. Verify that the Gemini API key is configured in the environment variables
-    api_key = os.environ.get("GEMINI_API_KEY")
+
+    # Step 1: Verify API key
+    api_key = os.getenv("GEMINI_API_KEY")
+
     if not api_key:
-        raise ValueError("GEMINI_API_KEY environment variable is not set. Please check your .env file.")
-    
-    logger.info("Analyzing hazard report with Gemini AI...")
-    
-    try:
-        # Initialize the official Google GenAI client and setup prompt contents
-        client = genai.Client(api_key=api_key)
-        contents: list[Any] = [prompt]
-        
-        # Encode and attach visual evidence (image) as a multimodal part if available
-        img_bytes, mime_type = encode_image(visual_evidence_path)
-        if img_bytes and mime_type:
-            contents.append(
-                types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
-            )
-
-        def _make_api_call() -> Optional[str]:
-            # Define the multi-model fallback cascade order
-            target_models = ['gemini-3.8-flash', 'gemini-3.6-flash'] 
-                
-            for model_name in target_models:
-                    # Allow up to 2 attempts per model
-                    for attempt in range(2):
-                        try:
-                            # Send content generation request to the current model with enforced JSON MIME type
-                            response = client.models.generate_content(
-                                model=model_name,
-                                contents=contents,
-                                config=types.GenerateContentConfig(
-                                    response_mime_type="application/json"
-                                )
-                            )
-                            raw_text = str(response.text)
-                            
-                            # Parse and validate response structure/schema
-                            parsed = parse_response(raw_text)
-                            if parsed and validate_response(parsed):
-                                return raw_text  # Return valid response text
-                            else:
-                                logger.warning(f"Invalid JSON or schema from {model_name}. Retrying...")
-                                continue
-                                
-                        except Exception as e:
-                            err_str = str(e)
-                            
-                            # Switch to the next model when the current model is rate-limited or quota-exhausted
-                            if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
-                                logger.warning(f"Quota limit reached on {model_name} (429). Switching model...")
-                                break
-                                
-                            # Retry the same model after a 2-second delay when the service is temporarily unavailable (503).
-                            if "503" in err_str and attempt < 1:
-                                logger.warning(f"High demand on {model_name} (503). Retrying...")
-                                time.sleep(2)
-                                continue
-                                
-                            # Raise the exception if the final model cannot complete the request.
-                            if model_name == target_models[-1]:
-                                raise e
-                            break
-            return None
-
-        # Run the API call in a separate thread so a timeout can be enforced
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future = executor.submit(_make_api_call)
-            res = future.result(timeout=300)  # 300-second execution timeout
-            if res:
-                return res
-
-    except concurrent.futures.TimeoutError:
-        logger.warning("API call timed out after 300 seconds.")
-        return json.dumps({
-            "error": "AI processing timed out"
-        })
-
-    except Exception as e:
-        logger.error(f"AI API error: {e}")
+        logger.error("GEMINI_API_KEY is not configured.")
         return json.dumps({
             "error": "AI processing unavailable"
         })
 
+    # Step 2: Prepare prompt and optional image evidence
+    contents: list[Any] = [prompt]
+
+    if (
+        visual_evidence_path
+        and str(visual_evidence_path).strip().lower()
+        not in ("none", "n/a")
+    ):
+        img_bytes, mime_type = encode_image(visual_evidence_path)
+
+        if not img_bytes or not mime_type:
+            logger.warning("Image evidence could not be processed.")
+            return json.dumps({
+                "error": "Image evidence unavailable"
+            })
+
+        contents.append(
+            types.Part.from_bytes(
+                data=img_bytes,
+                mime_type=mime_type
+            )
+        )
+
+    logger.info("Analyzing hazard report with Gemini AI...")
+
+    # Step 3: Define model fallback order
+    target_models = (
+        "gemini-3.8-flash",
+        "gemini-3.6-flash"
+    )
+
+    try:
+        # Step 4: Initialize Gemini client with HTTP timeout
+        with genai.Client(
+            api_key=api_key,
+            http_options=types.HttpOptions(
+                timeout=60_000,
+                retry_options=types.HttpRetryOptions(
+                    attempts=1
+                )
+            )
+        ) as client:
+
+            for model_name in target_models:
+
+                # Maximum two attempts per model
+                for attempt in range(2):
+
+                    try:
+                        # Step 5: Request structured JSON response
+                        response = client.models.generate_content(
+                            model=model_name,
+                            contents=contents,
+                            config=types.GenerateContentConfig(
+                                response_mime_type="application/json",
+                                automatic_function_calling=(
+                                    types.AutomaticFunctionCallingConfig(
+                                        disable=True
+                                    )
+                                )
+                            )
+                        )
+
+                        raw_text = response.text or ""
+
+                        # Step 6: Parse and validate response
+                        parsed = parse_response(raw_text)
+
+                        if (
+                            parsed is not None
+                            and validate_response(parsed)
+                        ):
+                            return raw_text
+
+                        logger.warning(
+                            "Invalid JSON/schema from %s "
+                            "(attempt %d/2).",
+                            model_name,
+                            attempt + 1
+                        )
+
+                    except errors.APIError as error:
+                        error_code = error.code
+
+                        # Rate limit: switch to next model
+                        if error_code == 429:
+                            logger.warning(
+                                "Rate limit on %s. Switching model.",
+                                model_name
+                            )
+                            break
+
+                        # Model unavailable: try backup model
+                        if error_code == 404:
+                            logger.warning(
+                                "Model %s unavailable.",
+                                model_name
+                            )
+                            break
+
+                        # Temporary errors: retry once
+                        if error_code in (408, 500, 502, 503, 504):
+                            if attempt == 0:
+                                logger.warning(
+                                    "HTTP %s on %s. Retrying...",
+                                    error_code,
+                                    model_name
+                                )
+                                time.sleep(2)
+                                continue
+
+                            logger.warning(
+                                "Model %s failed after two attempts.",
+                                model_name
+                            )
+                            break
+
+                        # Other API errors: stop
+                        logger.error(
+                            "Non-retryable Gemini API error: %s",
+                            error_code
+                        )
+                        return json.dumps({
+                            "error": "AI processing unavailable"
+                        })
+
+                    except Exception as error:
+                        logger.warning(
+                            "Request failed on %s (%s).",
+                            model_name,
+                            type(error).__name__
+                        )
+                        break
+
+    except Exception as error:
+        logger.error(
+            "Gemini client error (%s).",
+            type(error).__name__
+        )
+
+    # Step 7: Return controlled error for offline fallback
     return json.dumps({
-        "error": "AI processing failed"
+        "error": "AI processing unavailable"
     })
 
 def parse_response(raw: Any) -> Optional[dict[str, Any]]:
