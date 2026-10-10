@@ -153,7 +153,10 @@ def call_api(
     )
 
     try:
-        # Step 4: Initialize Gemini client with HTTP timeout
+        # Step 4: Configure a 60-second timeout per HTTP request to prevent
+        # the application from waiting indefinitely for Gemini.
+        # SDK retries are limited because the application manages
+        # model retries and fallback separately.
         with genai.Client(
             api_key=api_key,
             http_options=types.HttpOptions(
@@ -261,7 +264,9 @@ def call_api(
             type(error).__name__
         )
 
-    # Step 7: Return controlled error for offline fallback
+    # Step 7: Return a structured error if all Gemini models fail.
+    # The logic manager can then generate an offline assessment,
+    # allowing the hazard reporting workflow to continue.
     return json.dumps({
         "error": "AI processing unavailable"
     })
