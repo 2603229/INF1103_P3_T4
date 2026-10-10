@@ -1,10 +1,10 @@
 """Streamlit facilities incident management dashboard with automatic data refresh."""
 
-import json
 import os
-from typing import Any
+from typing import Any, Callable, cast
 
 import streamlit as st
+import Data_Manager
 
 from Data_Manager import (
     update_incident_status,
@@ -16,7 +16,6 @@ from Data_Manager import (
 )
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_FILE = get_db_path()
 STATUS_OPTIONS = ["Pending Review", "In Progress", "Resolved", "Closed"]
 CSV_FILENAME = "hazard_reports.csv"
 TXT_FILENAME = "hazard_reports.txt"
@@ -40,27 +39,36 @@ def set_flash(kind: str, message: str) -> None:
     st.session_state["flash"] = (kind, message)
 
 
+
 def load_incidents() -> list[dict[str, Any]] | None:
-    """Read the shared JSON database; display errors rather than crashing."""
-    if not os.path.exists(DATA_FILE):
-        st.warning("No incident database found yet. Submit a report in the terminal to create it.")
+    """
+    Loads incident records through Data_Manager.
+    Handles missing or corrupted database files gracefully.
+    """
+
+    # Check whether the incident database exists
+    if not os.path.exists(get_db_path()):
+        st.warning(
+            "No incident database found yet. "
+            "Submit a report in the terminal to create it."
+        )
         return None
 
-    try:
-        with open(DATA_FILE, "r", encoding="utf-8") as file:
-            records = json.load(file)
-    except (OSError, json.JSONDecodeError) as error:
-        st.error(f"Unable to read the incident database: {error}")
-        return None
+    # Retrieve incidents through Data_Manager
+    records = Data_Manager.load()
 
-    if not isinstance(records, list) or not all(isinstance(item, dict) for item in records):
-        st.error("The incident database must contain a list of incident records.")
+    # Display any database loading errors
+    if Data_Manager.last_load_warning:
+        st.error(Data_Manager.last_load_warning)
         return None
 
     return records
 
 
-def export_and_offer_download(export_fn, filename: str, label: str, mime: str) -> None:
+
+def export_and_offer_download(
+    export_fn: Callable[[str], bool], filename: str, label: str, mime: str
+) -> None:
     """Export all incidents and keep the download available after reruns."""
     if not export_fn(filename):
         st.error(f"{label} export failed. Check that the database contains incidents.")
@@ -101,21 +109,22 @@ def incident_dashboard() -> None:
 
     # ---- Incident table ----
     st.subheader(f"Incidents ({len(incidents)})")
-    st.dataframe(
-        [
-            {
-                "ID": item.get("incident_id"),
-                "Reported": item.get("timestamp"),
-                "Location": item.get("location"),
-                "Asset": item.get("asset_info"),
-                "Category": item.get("category"),
-                "Severity": item.get("severity"),
-                "Priority": item.get("final_priority"),
-                "Score": item.get("priority_score"),
-                "Status": item.get("status"),
-            }
-            for item in incidents
-        ],
+    table_data: list[dict[str, object]] = [
+        {
+            "ID": item.get("incident_id"),
+            "Reported": item.get("timestamp"),
+            "Location": item.get("location"),
+            "Asset": item.get("asset_info"),
+            "Category": item.get("category"),
+            "Severity": item.get("severity"),
+            "Priority": item.get("final_priority"),
+            "Score": item.get("priority_score"),
+            "Status": item.get("status"),
+        }
+        for item in incidents
+    ]
+    cast(Any, st).dataframe(
+        table_data,
         hide_index=False,
         width="stretch",
     )
