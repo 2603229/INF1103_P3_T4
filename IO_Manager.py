@@ -323,6 +323,34 @@ def select_image_via_dialog() -> str:
     except Exception as e:
         print(f"Error copying image file: {e}")
         return ""
+
+def display_priority_calculation(
+    record: dict[str, Any], decision: dict[str, Any]
+) -> None:
+    """Display the rule-based priority score before submission confirmation."""
+    breakdown = decision["score_breakdown"]
+    severity_score = breakdown["severity"]
+    operational_score = breakdown["operational_impact"]
+    frequency_score = breakdown["historical_frequency"]
+
+    print("\n========== PRIORITY SCORE CALCULATION ==========")
+    print(f"Severity: {record.get('severity', 'Low')} -> +{severity_score}")
+    print(
+        f"Operational Impact: {record.get('operational_impact', 'Minor')} "
+        f"-> +{operational_score}"
+    )
+    print(
+        f"Historical Frequency: {record.get('historical_frequency', 0)} "
+        f"-> +{frequency_score}"
+    )
+    print("-----------------------------------------------")
+    print(
+        f"Priority Score = {severity_score} + {operational_score} "
+        f"+ {frequency_score} = {decision['score']}"
+    )
+    print(f"Final Priority: {decision['priority']}")
+    print("===============================================")
+
     
 def main() -> None:
     """Main execution loop for the Campus Safety Hazard Reporting System."""

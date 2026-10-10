@@ -1,8 +1,7 @@
-
 import logging
 from typing import Any
 
-from ai_manager import build_prompt, call_api, parse_response
+from ai_manager import build_prompt, call_api, parse_response, validate_response
 
 logger = logging.getLogger(__name__)
 
@@ -30,33 +29,35 @@ def handle_ai_failure(record: dict[str, Any]) -> dict[str, Any]:
     if has_image:
         return {
             "risk_summary": (
-                "- [Offline Assessment] Visual evidence requires physical inspection\n"
-                "- Potential physical safety hazard to occupants"
+                "- [Offline Assessment] An image was attached but was not analysed\n"
+                "- The reported hazard requires a physical inspection"
             ),
-            "category": "Electrical / Infrastructure",
-            "severity": "Critical",
-            "operational_impact": "Severe",
+            # Provisional placeholders, not classifications inferred from the image.
+            "category": "General Maintenance",
+            "severity": "Medium",
+            "operational_impact": "Moderate",
             "contextual_insights": (
-                "Visual evidence indicates potential compromised physical "
-                "asset integrity. Cordon off the area and dispatch maintenance "
-                "for inspection."
-            )
+                "The AI service was unavailable, so the image was not assessed. "
+                "Facilities personnel should review the description and evidence, "
+                "inspect the site, and escalate any immediate danger under campus procedures. "
+                "The severity and impact values are provisional, not verified."
+            ),
         }
 
     return {
-        "risk_summary": (
-            "- [Offline Assessment] Potential hazard reported requiring "
-            "facility inspection\n"
-            "- Standard operational risk mitigation needed"
-        ),
-        "category": "General Maintenance",
-        "severity": "Medium",
-        "operational_impact": "Moderate",
-        "contextual_insights": (
-            "Standard facility review recommended to ensure campus safety "
-            "compliance."
-        )
-    }
+            "risk_summary": (
+                "- [Offline Assessment] The reported hazard was not assessed by AI\n"
+                "- A facilities review is required"
+            ),
+            "category": "General Maintenance",
+            "severity": "Medium",
+            "operational_impact": "Moderate",
+            "contextual_insights": (
+                "AI analysis was unavailable. Facilities personnel should review "
+                "the report and verify the risk level; the assigned values are provisional."
+            ),
+        }
+
 
 
 def process_record(record: dict[str, Any]) -> dict[str, Any]:
@@ -89,7 +90,7 @@ def process_record(record: dict[str, Any]) -> dict[str, Any]:
     parsed_response = parse_response(raw_response)
 
     # If AI successfully returned a valid assessment, use it
-    if parsed_response and "error" not in parsed_response:
+    if parsed_response and "error" not in parsed_response and validate_response(parsed_response):
         return parsed_response
 
     # AI processing failed, so apply the domain-specific fallback
@@ -126,137 +127,107 @@ def calculate_historical_frequency(
 
     return frequency
 
-
-def score(record: dict[str, Any]) -> int:
+def calculate_score_breakdown(record: dict[str, Any]) -> dict[str, int]:
     """
-    Produces a numeric priority score from AI-enriched hazard fields.
+    Calculate each scoring component without displaying terminal output.
 
-    Higher scores indicate higher priority.
+    Gemini supplies severity and operational impact. Historical frequency
+    is calculated by the business logic from previously stored incidents.
     """
+    severity = str(record.get("severity", "Low")).strip().lower()
+    operational_impact = str(record.get("operational_impact", "Minor")).strip().lower()
 
-    severity = str(
-        record.get("severity", "low")
-    ).strip().lower()
+    severity_points = {
+        "low": 1,
+        "medium": 2,
+        "high": 4,
+        "critical": 5,
+    }
+    impact_points = {
+        "minor": 1,
+        "moderate": 2,
+        "severe": 4,
+        "catastrophic": 5,
+    }
 
-    safety_risk = str(
-        record.get("safety_risk", "low")
-    ).strip().lower()
+    severity_score = severity_points.get(severity, 1)
+    operational_score = impact_points.get(operational_impact, 1)
 
-    operational_impact = str(
-        record.get("operational_impact", "low")
-    ).strip().lower()
+    try:
+        frequency = max(0, int(record.get("historical_frequency", 0)))
+    except (TypeError, ValueError):
+        frequency = 0
 
-    historical_frequency = record.get("historical_frequency", 0)
-
-    # Calculate severity score
-    if severity == "critical":
-        severity_score = 5
-    elif severity == "high":
-        severity_score = 4
-    elif severity == "medium":
-        severity_score = 2
-    else:
-        severity_score = 1
-
-    # Calculate safety risk score
-    if safety_risk == "high":
-        safety_score = 4
-    elif safety_risk == "medium":
-        safety_score = 2
-    else:
-        safety_score = 1
-
-    # Calculate operational impact score
-    if operational_impact == "severe":
-        operational_score = 4
-    elif operational_impact == "high":
-        operational_score = 3
-    elif operational_impact == "medium":
-        operational_score = 2
-    else:
-        operational_score = 1
-
-    # Calculate historical frequency score
-    if historical_frequency >= 5:
+    if frequency >= 5:
         frequency_score = 3
-    elif historical_frequency >= 2:
+    elif frequency >= 2:
         frequency_score = 2
-    elif historical_frequency >= 1:
+    elif frequency >= 1:
         frequency_score = 1
     else:
         frequency_score = 0
 
-    # Final calculation
-    priority_score = (
-        severity_score
-        + safety_score
-        + operational_score
-        + frequency_score
-    )
+    return {
+        "severity": severity_score,
+        "operational_impact": operational_score,
+        "historical_frequency": frequency_score,
+    }
 
-    # Show calculation in terminal
-    print("\n--- PRIORITY SCORE CALCULATION ---")
-    print(f"Severity: {severity} → +{severity_score}")
-    print(f"Safety Risk: {safety_risk} → +{safety_score}")
-    print(f"Operational Impact: {operational_impact} → +{operational_score}")
-    print(f"Historical Frequency: {historical_frequency} → +{frequency_score}")
-    print("----------------------------------")
-    print(
-        f"Priority Score = {severity_score} + "
-        f"{safety_score} + "
-        f"{operational_score} + "
-        f"{frequency_score} = {priority_score}"
-    )
+def score(record: dict[str, Any]) -> int:
+    """Return the numerical priority score (higher means more urgent)."""
+    return sum(calculate_score_breakdown(record).values())
 
-    return priority_score
 
 def evaluate(record: dict[str, Any]) -> dict[str, Any]:
     """
-    Runs business rules against an AI-enriched hazard record.
-
-    Returns:
-        dict[str, Any]: The business decision for the hazard.
+    Evaluates AI-enriched hazard data and determines
+    the final priority, recommended action, and routing.
     """
 
     severity = str(
-        record.get("severity", "low")
+        record.get("severity", "Low")
     ).strip().lower()
 
     operational_impact = str(
-        record.get("operational_impact", "low")
+        record.get("operational_impact", "Minor")
     ).strip().lower()
 
-    priority_score = score(record)
+    # Calculate the individual scoring components
+    breakdown = calculate_score_breakdown(record)
+    priority_score = sum(breakdown.values())
 
-    # Multi-condition business rule:
-    # Critical severity AND severe operational impact
-    # require immediate emergency response.
-    if severity == "critical" and operational_impact == "severe":
+    # Critical severity combined with severe or catastrophic
+    # impact requires immediate attention.
+    if severity == "critical" and operational_impact in (
+        "severe", "catastrophic"
+    ):
         priority = "Critical"
         action = "Immediate Emergency Dispatch"
         reason = (
-            "Critical severity combined with severe operational impact."
+            "Critical severity combined with severe "
+            "or catastrophic operational impact."
         )
 
-    elif severity == "high" and operational_impact in ["high", "severe"]:
-        priority = "High"
-        action = "Urgent Maintenance"
-        reason = (
-            "High severity combined with significant operational impact."
-        )
-
-    elif priority_score >= 8:
+    # High severity, severe impact, or a high total score
+    # requires priority maintenance.
+    elif (
+        severity in ("high", "critical")
+        or operational_impact in ("severe", "catastrophic")
+        or priority_score >= 7
+    ):
         priority = "High"
         action = "Priority Maintenance"
         reason = (
-            "Priority score reached the high-risk threshold."
+            "Hazard severity, operational impact, or "
+            "priority score requires urgent attention."
         )
 
     else:
         priority = "Normal"
         action = "Standard Maintenance"
         reason = (
-            "Hazard does not meet the criteria for urgent escalation."
+            "Hazard does not meet the criteria "
+            "for urgent escalation."
         )
 
     return {
@@ -264,22 +235,28 @@ def evaluate(record: dict[str, Any]) -> dict[str, Any]:
         "score": priority_score,
         "action": action,
         "reason": reason,
-        "route": route(record)
+        "route": route(priority),
+        "score_breakdown": breakdown
     }
 
-def route(record: dict[str, Any]) -> str:
+
+def route(priority: str) -> str:
     """
-    Determines the operational dispatch queue based on severity.
+    Determines the dispatch queue based on
+    the final evaluated hazard priority.
     """
 
-    severity = str(
-        record.get("severity", "low")
-    ).strip().lower()
+    priority = str(priority).strip().lower()
 
-    if severity in ["critical", "high"]:
+    if priority == "critical":
         return "Urgent Emergency Dispatch"
 
+    if priority == "high":
+        return "Priority Maintenance Queue"
+
     return "Standard Maintenance Queue"
+
+
 
 def check_duplicate(
     new_record: dict[str, Any],
@@ -290,22 +267,44 @@ def check_duplicate(
     an unresolved existing report.
     """
 
-    for r in existing_records:
+    new_location = str(
+        new_record.get("location") or ""
+    ).strip().lower()
 
-        loc_match = (
-            str(new_record.get("location", "")).strip().lower()
-            == str(r.get("location", "")).strip().lower()
-        )
+    new_asset = str(
+        new_record.get("asset_info") or ""
+    ).strip().lower()
 
-        asset_match = (
-            str(new_record.get("asset_info", "")).strip().lower()
-            == str(r.get("asset_info", "")).strip().lower()
-        )
+    # Prevent missing input fields from creating false matches
+    if not new_location or not new_asset:
+        return "Unique"
 
-        if loc_match and asset_match and r.get("status") not in ("Resolved", "Closed"):
-            return f"Potential Duplicate of {r.get('incident_id')}"
+    for existing in existing_records:
+
+        existing_location = str(
+            existing.get("location") or ""
+        ).strip().lower()
+
+        existing_asset = str(
+            existing.get("asset_info") or ""
+        ).strip().lower()
+
+        status = str(
+            existing.get("status") or ""
+        ).strip().lower()
+
+        if (
+            new_location == existing_location
+            and new_asset == existing_asset
+            and status not in ("resolved", "closed")
+        ):
+            return (
+                f"Potential Duplicate of "
+                f"{existing.get('incident_id')}"
+            )
 
     return "Unique"
+
 
 def sort_incidents_by_severity(
     records: list[dict[str, Any]]

@@ -375,6 +375,11 @@ def submit_hazard_report() -> None:
     record["status"] = "Pending Review"
 
     # --------------------------------------------------------
+    # SHOW RULE-BASED PRIORITY SCORE BEFORE THE SUMMARY
+    # --------------------------------------------------------
+    IO_Manager.display_priority_calculation(record, decision)
+
+    # --------------------------------------------------------
     # STEP 9: PRE-SUBMISSION SUMMARY
     # --------------------------------------------------------
 
