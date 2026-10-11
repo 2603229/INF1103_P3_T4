@@ -411,10 +411,13 @@ def main() -> None:
     try:
         while True:
             try:
-                print("\n==============================================================================")
-                print(" Please visit the Streamlit interface in your web browser for management tasks. ")
-                print("==============================================================================\n")
-                print("\n Visit localhost:8501 in your web browser to access the management UI.\n")
+                IO_Manager.display_message(
+                    "\n==============================================================================\n"
+                    " Please visit the Streamlit interface in your web browser for management tasks.\n"
+                    "==============================================================================\n"
+                    "\n Visit localhost:8501 in your web browser to access the management UI.\n"
+                )
+
                 choice = IO_Manager.display_menu()
 
                 # OPTION 1: SUBMIT REPORT
