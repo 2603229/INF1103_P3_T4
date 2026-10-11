@@ -37,7 +37,7 @@ The original proposal specified five main inputs: **location**, **visual evidenc
 ## ✨ Features
 
 - **📝 Guided hazard reporting:** Collects reporter details, location, estimated people affected, asset information, and a hazard description, with input validation.
-- **📷 Optional image evidence:** Accepts PNG, JPEG and WebP images via a graphical file picker, with terminal-based path input when a graphical interface is unavailable. Copies accepted images to `uploads/` using unique filenames to avoid overwriting existing attachments.
+- **📷 Optional image evidence:** Accepts PNG, JPEG and WebP images through a graphical file picker, with terminal-based input when a graphical interface is unavailable. Images are saved in the `uploads`/ directory using their original filenames. If a filename already exists, a numbered suffix (e.g., _2, _3) is automatically added to prevent overwriting.
 - **🤖 AI risk assessment:** Requests a structured Gemini assessment containing category, severity, operational impact, risk summary, and contextual insights.
 - **🛟 Offline fallback:** Creates a rule-based fallback assessment if Gemini is unavailable or returns an unusable response.
 - **🚦 Priority and routing:** Calculates a priority score, recommends an action, and assigns a maintenance or urgent-dispatch queue label.
@@ -59,13 +59,17 @@ The original proposal specified five main inputs: **location**, **visual evidenc
 ├── management_ui.py              # Streamlit incident management dashboard
 ├── test_script.py                # 34 procedural offline automated tests
 ├── requirement.txt               # Python dependencies (singular filename)
+├── Dockerfile                    # Python 3.12 container configuration
+├── .dockerignore                 # Excludes secrets/data from Docker build context
+├── DOCKER.md                     # Docker build, run and troubleshooting guide
 ├── .gitignore                    # Git exclusions
 └── README.md
 
-Generated locally (excluded from Git tracking):
+Generated locally (keep private; ensure these are excluded from Git tracking):
 ├── .env                          # Private Gemini API key; never commit
 ├── hazardreportdb.json           # Local incident database
 ├── uploads/                      # Optional hazard image attachments
+├── evidence/                     # Optional local Docker image inputs (keep private)
 ├── hazard_reports.csv            # Generated CSV export
 └── hazard_reports.txt            # Generated TXT export
 ```
@@ -119,6 +123,7 @@ The application processes a report in this order:
 
 - **Python 3.10 or newer** (the updated Streamlit dashboard uses union type annotations such as `list[dict[str, Any]] | None`).
 - `pip` and access to install Python dependencies.
+- **Docker Desktop / Docker Engine** for the optional container build and demonstration.
 - A graphical environment with Tkinter for the native image picker; where unavailable, the CLI accepts an image file path instead.
 - A Gemini API key for live AI analysis. Without a usable key or service, the normal submission workflow uses an offline fallback assessment.
 
@@ -199,6 +204,67 @@ The current input checks include:
 - An asset summary of at least **3 characters**.
 - A hazard description of at least **15 characters**.
 
+## 🐳 Docker Deployment
+
+The Campus Safety Hazard Reporting System includes Docker configuration for consistent deployment. The Docker image uses **Python 3.12**, installs dependencies from `requirement.txt`, and runs the interactive CLI (`main.py`) together with the Streamlit facilities dashboard on port **8501**.
+
+### Prerequisites
+
+Install Docker Desktop (Windows/macOS) or Docker Engine (Linux) and ensure the Docker service is running.
+
+### Build the Docker image
+
+From the project root:
+
+```bash
+docker build -t hazard-reporter .
+```
+
+### Run automated tests in Docker
+
+Run the procedural offline tests inside the image:
+
+```bash
+docker run --rm hazard-reporter python test_script.py
+```
+
+The test suite defines **34 tests**, with mocked Gemini requests and temporary test databases. A successful run should report **34 passed, 0 failed**. The Docker test result must be verified on a machine with Docker available; the existence of a Dockerfile alone does not prove the image or application works.
+
+### Run the CLI and dashboard
+
+In **Windows PowerShell** (or a macOS/Linux terminal), from the project root with a private `.env` file:
+
+```powershell
+docker run -it --rm --init --env-file .env -p 8501:8501 -v hazard-data:/app/data -v hazard-uploads:/app/uploads hazard-reporter
+```
+
+The four-option CLI opens in the terminal. Visit **http://localhost:8501** to use the Streamlit dashboard. Select **option 4** in the CLI to exit. If you are testing only the offline fallback without an `.env` file, omit `--env-file .env`.
+
+### Persistent data storage
+
+The container uses named Docker volumes to preserve application data between container runs:
+
+| Volume | Container directory | Stored content |
+| --- | --- | --- |
+| `hazard-data` | `/app/data` | `hazardreportdb.json` and CSV/TXT exports |
+| `hazard-uploads` | `/app/uploads` | Attached hazard images |
+
+Within Docker, `HAZARD_DATA_DIR=/app/data` ensures `Data_Manager.py` stores incident data in the mounted volume. The database is created when the first confirmed incident is saved if it does not already exist.
+
+### Optional image attachments
+
+Docker runs without a graphical file picker, so the CLI accepts an image path instead. Place supported images in a local `evidence/` folder, mount the folder read-only when running the container, and enter the container path such as `/evidence/photo.jpg` when prompted. See [`DOCKER.md`](DOCKER.md) for the full Windows and macOS/Linux commands.
+
+### Security
+
+The `.dockerignore` file keeps the private `.env`, local incident database, exports, uploaded evidence, Python caches, and other unnecessary files out of the Docker build context. The `.gitignore` file separately excludes local credentials and incident data from future Git tracking. Both files should exclude any `evidence/` directory containing private images; verify the ignore rules before committing.
+
+Never publish real API keys, reporter contact details, or incident images. Keeping files out of future commits does not erase them from earlier Git history.
+
+### Docker documentation and CI/CD status
+
+See [`DOCKER.md`](DOCKER.md) for detailed build/run commands, evidence mounting, volumes, shutdown and troubleshooting. Docker deployment and test results should be described as verified **only after** running them successfully. GitHub Actions CI/CD setup or verification remains a separate task.
+
 ## 🤖 AI assessment and fallback
 
 The Gemini response is expected to contain these five string fields:
@@ -262,7 +328,7 @@ python test_script.py --details
 python test_script.py --no-data
 ```
 
-Gemini calls are mocked so the test suite does **not** require a live API key or network access. Data Manager tests use temporary JSON files to avoid changing the actual incident database. Manually verify Streamlit functionality, image attachment, and live Gemini assessment separately.
+Gemini calls are mocked so the test suite does **not** require a live API key or network access. Data Manager tests use temporary JSON files to avoid changing the actual incident database. Run `docker run --rm hazard-reporter python test_script.py` to repeat the same tests inside a successfully built Docker image. Manually verify Streamlit functionality, image attachment, and live Gemini assessment separately.
 
 ## 👥 Created By
 
