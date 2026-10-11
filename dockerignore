@@ -1,0 +1,22 @@
+# Secrets - pass with --env-file instead of baking into the image
+.env
+
+# Local environments and caches
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Git
+.git/
+.gitignore
+
+# Local data - kept in Docker volumes instead
+hazardreportdb.json
+hazardreportdb.json.tmp
+uploads/
+hazard_reports.csv
+hazard_reports.txt
+
+# Docs
+*.md
