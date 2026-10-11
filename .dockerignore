@@ -1,0 +1,27 @@
+# Git files
+.git/
+.github/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+
+# Incident database and exports
+hazardreportdb.json
+hazard_reports.csv
+hazard_reports.txt
+
+# Uploaded images
+uploads/
+
+# Temporary files
+*.tmp
