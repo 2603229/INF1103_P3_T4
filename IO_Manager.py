@@ -2,7 +2,6 @@
 import re
 import os
 import shutil
-import uuid
 
 from typing import Any
 from collections import Counter
@@ -322,10 +321,22 @@ def select_image_via_dialog() -> str:
     try:
         os.makedirs(upload_dir, exist_ok=True)
 
-        # Unique filename prevents overwriting existing images
-        filename = f"{uuid.uuid4().hex}_{os.path.basename(file_path)}"
+
+        # Preserve the original image filename
+        original_filename = os.path.basename(file_path)
+
+        name, extension = os.path.splitext(original_filename)
+
+        filename = original_filename
+        counter = 2
+
+        # Prevent overwriting images with the same filename
+        while os.path.exists(os.path.join(upload_dir, filename)):
+            filename = f"{name}_{counter}{extension}"
+            counter += 1
 
         destination = os.path.join(upload_dir, filename)
+
 
         shutil.copy2(file_path, destination)
 
