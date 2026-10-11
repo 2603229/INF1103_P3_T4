@@ -37,7 +37,7 @@ The original proposal specified five main inputs: **location**, **visual evidenc
 ## ✨ Features
 
 - **📝 Guided hazard reporting:** Collects reporter details, location, estimated people affected, asset information, and a hazard description, with input validation.
-- **📷 Optional image evidence:** Accepts PNG, JPEG and WebP images through a graphical file picker, with terminal-based input when a graphical interface is unavailable. Images are saved in the `uploads`/ directory using their original filenames. If a filename already exists, a numbered suffix (e.g., _2, _3) is automatically added to prevent overwriting.
+- **📷 Optional image evidence:** Accepts PNG, JPEG and WebP images through a graphical file picker, with terminal-based path input when a graphical interface is unavailable. Images are saved in the `uploads/` directory using their original filenames. When a filename already exists, a numbered suffix (such as `_2` or `_3`) prevents overwriting.
 - **🤖 AI risk assessment:** Requests a structured Gemini assessment containing category, severity, operational impact, risk summary, and contextual insights.
 - **🛟 Offline fallback:** Creates a rule-based fallback assessment if Gemini is unavailable or returns an unusable response.
 - **🚦 Priority and routing:** Calculates a priority score, recommends an action, and assigns a maintenance or urgent-dispatch queue label.
@@ -62,6 +62,9 @@ The original proposal specified five main inputs: **location**, **visual evidenc
 ├── Dockerfile                    # Python 3.12 container configuration
 ├── .dockerignore                 # Excludes secrets/data from Docker build context
 ├── DOCKER.md                     # Docker build, run and troubleshooting guide
+├── .github/                      # GitHub Actions configuration
+│   └── workflows/
+│       └── ci.yml                # Automated Python and Docker CI pipeline
 ├── .gitignore                    # Git exclusions
 └── README.md
 
@@ -228,7 +231,7 @@ Run the procedural offline tests inside the image:
 docker run --rm hazard-reporter python test_script.py
 ```
 
-The test suite defines **34 tests**, with mocked Gemini requests and temporary test databases. A successful run should report **34 passed, 0 failed**. The Docker test result must be verified on a machine with Docker available; the existence of a Dockerfile alone does not prove the image or application works.
+**Docker verification (11 October 2026):** The `hazard-reporter` image built successfully, and all **34 procedural automated tests passed inside Docker**, with zero failures, errors, or skipped tests. The interactive CLI, a live Gemini assessment, and JSON incident persistence across container restarts were also verified. Team members should still test the image on their own machines before submission.
 
 ### Run the CLI and dashboard
 
@@ -263,7 +266,40 @@ Never publish real API keys, reporter contact details, or incident images. Keepi
 
 ### Docker documentation and CI/CD status
 
-See [`DOCKER.md`](DOCKER.md) for detailed build/run commands, evidence mounting, volumes, shutdown and troubleshooting. Docker deployment and test results should be described as verified **only after** running them successfully. GitHub Actions CI/CD setup or verification remains a separate task.
+See [`DOCKER.md`](DOCKER.md) for build/run commands, evidence mounting, volumes, shutdown and troubleshooting. Docker image building, automated testing, and persistence have been verified. GitHub Actions continuous integration is also configured and verified, as described below.
+
+## 🔄 Continuous Integration (GitHub Actions)
+
+The project uses GitHub Actions for **continuous integration (CI)**. The workflow is defined in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and runs on pushes, pull requests, and manual dispatch.
+
+### CI pipeline
+
+The pipeline runs on **Ubuntu 24.04** with **Python 3.12** and automatically:
+
+1. Checks out the repository.
+2. Sets up Python and installs dependencies from `requirement.txt`.
+3. Verifies Python syntax.
+4. Runs all **34 offline automated tests**.
+5. Builds the `hazard-reporter` Docker image.
+6. Runs the **34 tests again inside Docker**.
+
+Gemini API calls are mocked in the automated tests, so no live API key is required for CI.
+
+### Verified workflow run
+
+| Item | Verified result |
+| --- | --- |
+| Workflow | INF1103 Team 4 CI Pipeline |
+| Run | #2 |
+| Date | 11 October 2026 |
+| Branch | `main` |
+| Commit | `75e3244` |
+| Status | **Success** |
+| Total duration | 1 minute 10 seconds |
+
+[View GitHub Actions runs](https://github.com/2603229/INF1103_P3_T4/actions).
+
+This workflow provides automated **CI verification**; automatic deployment to a production server is not configured. Subsequent pushes should continue to pass the checks.
 
 ## 🤖 AI assessment and fallback
 
@@ -277,7 +313,7 @@ The Gemini response is expected to contain these five string fields:
 | `operational_impact` | `Minor`, `Moderate`, `Severe`, or `Catastrophic` |
 | `contextual_insights` | Explanation and relevant safety considerations |
 
-`ai_manager.py` uses the official Google GenAI SDK to request a structured JSON hazard assessment. The configured model candidates are `gemini-3.8-flash` and `gemini-3.6-flash`; live assessment depends on those model IDs being available to the configured API account. Model availability has not been independently verified.
+`ai_manager.py` uses the official Google GenAI SDK to request a structured JSON hazard assessment. The configured model candidates are `gemini-3.8-flash` and `gemini-3.6-flash`. A live request to `gemini-3.8-flash` succeeded during the Docker demonstration on 11 October 2026; availability of each model still depends on the configured API account.
 
 Each HTTP request is configured with a **60-second timeout**. The application handles rate-limit errors (429), retries some temporary failures (such as 503), and switches between configured models where appropriate. The timeout applies **per HTTP request**, not to the entire assessment workflow; retries and model fallback can extend total processing time.
 
@@ -310,40 +346,4 @@ The project includes `test_script.py`, containing **34 procedural offline automa
 | Test area | What is covered |
 | --- | --- |
 | AI Manager | Prompt creation, response validation, JSON parsing, and mocked API requests |
-| Logic Manager | Priority scoring, evaluation, duplicate detection, and fallback behaviour |
-| Data Manager | Database load/save, IDs, status updates, deletion, and malformed JSON handling |
-| IO Manager | Submission confirmation input handling |
-| Main workflow | Saving confirmed reports and not saving cancelled reports |
-
-Run from the project root:
-
-```bash
-python test_script.py
-```
-
-For individual test results, or to run without database tests:
-
-```bash
-python test_script.py --details
-python test_script.py --no-data
-```
-
-Gemini calls are mocked so the test suite does **not** require a live API key or network access. Data Manager tests use temporary JSON files to avoid changing the actual incident database. Run `docker run --rm hazard-reporter python test_script.py` to repeat the same tests inside a successfully built Docker image. Manually verify Streamlit functionality, image attachment, and live Gemini assessment separately.
-
-## 👥 Created By
-
-🎓 **INF1103 – Programming Fundamentals with DevOps**  
-🏫 **Team 4 | Singapore Institute of Technology (SIT)**
-
-### 👨‍💻 Team Members
-
-- CHAN RUI RU
-- CHEE BO YU
-- KOH KA-WEI DARRYL
-- CHUA QIN NI JAMIE
-- KHUN AUNG HEIN
-- CHIA SENG CHAN
-
-## 🔗 Repository
-
-[INF1103 Team 4 – GitHub](https://github.com/2603229/INF1103_P3_T4)
+| Logic Manager | Priority scoring, evaluation, duplicate detection
