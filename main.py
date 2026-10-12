@@ -403,6 +403,20 @@ def main() -> None:
     Main application controller.
     """
 
+    # Load existing incident records during application startup.
+    existing_records = Data_Manager.load()
+
+    if Data_Manager.last_load_warning:
+        IO_Manager.display_message(
+            f"[Warning] {Data_Manager.last_load_warning}"
+        )
+    else:
+        logger.info(
+            "Loaded %d existing incident records.",
+            len(existing_records)
+        )
+
+    # Start the Streamlit management dashboard.
     streamlit_proc = subprocess.Popen(
         [sys.executable, "-m", "streamlit", "run",
          os.path.join(BASE_DIR, "management_ui.py")],
