@@ -2,7 +2,7 @@
 
 **INF1103 · Team 4 · SIT Punggol Coast**
 
-A modular Python campus hazard reporting application that lets students and staff submit facility hazards through a command-line interface (CLI). It uses Google Gemini to assess risk when available, applies rule-based priority and dispatch decisions, and stores completed incident records in a local JSON database. A separate Streamlit interface lets facilities staff review and manage incidents.
+A modular Python campus hazard reporting application that lets students and staff submit facility hazards through a command-line interface (CLI). It requires a validated Google Gemini assessment before calculating risk priorities and saving a new incident, applies rule-based routing decisions, and stores completed records in a local JSON database. A separate Streamlit interface lets facilities staff review and manage incidents.
 
 > **Project scope:** This is a prototype decision-support system. AI assessments and automated routing recommendations should be reviewed by authorised facilities personnel; the program does not itself dispatch an emergency response.
 
@@ -26,20 +26,20 @@ The original proposal specified five main inputs: **location**, **visual evidenc
 | Proposed capability | Current implementation |
 | --- | --- |
 | Multimodal hazard submission | CLI accepts written report details and one optional PNG, JPEG or WebP image through a graphical picker or terminal path input when the GUI is unavailable. |
-| AI risk summary, classification and assessment | Gemini is used to produce a risk summary, category, severity, operational impact, and contextual insights when available. |
+| AI risk summary, classification and assessment | A valid Gemini assessment supplies the risk summary, category, severity, operational impact and contextual insights; unsuccessful assessments cannot be saved. |
 | Historical patterns and duplicate detection | Rule-based comparisons identify prior incidents with matching location and asset details. |
 | Deterministic priority and routing | Business rules calculate a score, recommend an action, and assign a queue label. |
 | Human-in-the-loop oversight | Streamlit interface supports incident review and status changes; it does **not** currently offer an interface to edit AI category, severity, or routing recommendations. |
 | Persist incident and dispatch | The system stores the incident and its recommended dispatch route locally; it does **not** automatically notify or dispatch a real maintenance or emergency team. |
 
-**Design distinction:** The system generates the AI assessment and calculates hazard priority before asking the reporter to confirm submission. The reporter can review the assessment summary and either confirm or cancel. Only confirmed reports are saved to the JSON database.
+**Design distinction:** A validated Gemini assessment is essential to submitting a new report. A failed AI request stops the workflow without scoring or saving; when AI succeeds, the reporter reviews the priority summary and confirms or cancels. Only successful, confirmed reports are saved to JSON.
 
 ## ✨ Features
 
 - **📝 Guided hazard reporting:** Collects reporter details, location, estimated people affected, asset information, and a hazard description, with input validation.
 - **📷 Optional image evidence:** Accepts PNG, JPEG and WebP images through a graphical file picker, with terminal-based path input when a graphical interface is unavailable. Images are saved in the `uploads/` directory using their original filenames. When a filename already exists, a numbered suffix (such as `_2` or `_3`) prevents overwriting.
 - **🤖 AI risk assessment:** Requests a structured Gemini assessment containing category, severity, operational impact, risk summary, and contextual insights.
-- **🛟 Offline fallback:** Creates a rule-based fallback assessment if Gemini is unavailable or returns an unusable response.
+- **🛡️ AI-dependent submission (C2):** Every new report attempts Gemini processing. Only a successfully validated Gemini assessment can proceed to prioritisation and saving; API failures stop the submission safely without creating an incident.
 - **🚦 Priority and routing:** Calculates a priority score, recommends an action, and assigns a maintenance or urgent-dispatch queue label.
 - **🔎 Recurring-hazard checks:** Compares new reports with historical records to identify repeated location/asset combinations and potential duplicates.
 - **🗃️ Incident history:** Saves each completed report, including the original inputs, assessment, decision, ID, timestamp, and status, in `hazardreportdb.json`.
@@ -59,7 +59,7 @@ The original proposal specified five main inputs: **location**, **visual evidenc
 ├── logic_manager.py              # Fallback, scoring, duplicates and routing
 ├── Data_Manager.py               # Incident storage, ID counter, backups and exports
 ├── management_ui.py              # Streamlit incident management dashboard
-├── test_script.py                # 39 procedural offline automated tests
+├── test_script.py                # 40 procedural offline automated tests
 ├── requirement.txt               # Python dependencies (singular filename)
 ├── Dockerfile                    # Python 3.12 container configuration
 ├── .dockerignore                 # Excludes secrets/data from Docker build context
@@ -89,16 +89,15 @@ Generated locally (keep private; ensure these are excluded from Git tracking):
 flowchart TD
     A[CLI: submit new hazard] --> B[IO_Manager: validate input and optional image]
     B --> C[main: prepare record and load history]
-    C --> D[ai_manager via logic_manager: Gemini assessment]
-    D --> E{Valid Gemini assessment?}
-    E -->|Yes| F[Structured risk assessment]
-    E -->|No| G[Offline fallback assessment]
-    F --> H[logic_manager: frequency, duplicate, score and routing]
-    G --> H
+    C --> D[Gemini assessment via logic_manager and ai_manager]
+    D --> E{Valid Gemini JSON response?}
+    E -->|No| X[Display AI error; stop without saving]
+    E -->|Yes| F[Validated AI assessment]
+    F --> H[logic_manager: history, duplicates, priority and routing]
     H --> P[IO_Manager: show assessment and priority summary]
     P --> Q{Reporter confirms submission?}
-    Q -->|No| X[Cancel without saving]
-    Q -->|Yes| I[Data_Manager: assign ID and save complete record]
+    Q -->|No| Y[Cancel without saving]
+    Q -->|Yes| I[Data_Manager: reserve ID and save complete record]
     I --> J[(hazardreportdb.json)]
     J --> K[CLI incident views]
     J --> L[Streamlit management UI]
@@ -108,7 +107,7 @@ flowchart TD
 The application processes a report in this order:
 
 1. **Input:** `IO_Manager.py` gathers and validates reporter details and optional evidence.
-2. **Assessment:** `main.py` passes the record into `logic_manager.process_record()`, which calls `ai_manager.py` for Gemini processing and uses an offline assessment if necessary.
+2. **Assessment:** `main.py` invokes `logic_manager.process_record()`, which calls `ai_manager.py` for Gemini processing. If the result is unavailable or fails validation, the new submission stops before scoring or saving.
 3. **Business rules:** `logic_manager.py` checks historical frequency and potential duplicates, calculates a priority score, and selects a recommended action and route.
 4. **Confirmation:** `IO_Manager.py` presents the assessment and recommended action; the reporter chooses whether to save or cancel.
 5. **Storage:** For confirmed submissions, `Data_Manager.py` reserves an `INCIDENT-001`-style identifier in `.incident_id_counter` and persists the complete incident in `hazardreportdb.json`. The counter prevents reuse of issued numbers during normal single-writer operation.
@@ -118,13 +117,13 @@ The application processes a report in this order:
 
 | File | Responsibility |
 | --- | --- |
-| `main.py` | Coordinates input, AI assessment, business-rule evaluation, persistence, and CLI navigation; launches Streamlit as a subprocess. |
+| `main.py` | Coordinates input, checks the JSON database at startup, enforces validated Gemini assessment before saving (C2), runs business rules and launches Streamlit as a subprocess. |
 | `IO_Manager.py` | Displays the four-option CLI menu, validates reporter input and image attachment confirmation (`y`/`yes`/`n`/`no`), and uses Tkinter for optional image selection with terminal fallback. |
 | `ai_manager.py` | Builds the Gemini prompt, attaches supported image content, calls configured models, parses JSON, and validates expected response fields. |
-| `logic_manager.py` | Handles offline fallback, scoring, historical frequency, potential-duplicate detection, priority decisions, and routing. |
+| `logic_manager.py` | Invokes AI processing, manages internal failure responses, checks incident history, calculates scores, detects duplicates and recommends routing; an offline response does not permit a saved submission. |
 | `Data_Manager.py` | Loads and saves the JSON database, persists the incident ID counter, updates/deletes/clears records with backup protection for destructive operations, restores snapshots programmatically, and exports CSV/TXT files. |
 | `management_ui.py` | Shows a Streamlit incident table and details, uses `Data_Manager.load()` for incident data, enables status changes and deletion, and provides exports, with an approximately 2-second automatic refresh. |
-| `test_script.py` | Runs 39 procedural offline automated tests, including mocked Gemini requests, historical-frequency checks, ID non-reuse, backup-failure protection, restoration and image confirmation validation. |
+| `test_script.py` | Runs 40 procedural offline automated tests, including mocked Gemini requests, C2 rejection of AI failures, incident ID persistence, backup recovery and input validation. |
 
 ## ✅ Prerequisites
 
@@ -132,7 +131,7 @@ The application processes a report in this order:
 - `pip` and access to install Python dependencies.
 - **Docker Desktop / Docker Engine** for the optional container build and demonstration.
 - A graphical environment with Tkinter for the native image picker; where unavailable, the CLI accepts an image file path instead.
-- A Gemini API key for live AI analysis. Without a usable key or service, the normal submission workflow uses an offline fallback assessment.
+- A **valid Gemini API key and working Gemini service are required to complete a new report submission**. If assessment fails, the application reports the error and does not save an incident.
 
 ## 🛠️ Installation
 
@@ -235,7 +234,26 @@ Run the procedural offline tests inside the image:
 docker run --rm hazard-reporter python test_script.py
 ```
 
-**Previous Docker verification (12 October 2026; 35-test version):** The `hazard-reporter` image built successfully, and all **35 procedural automated tests passed locally and inside Docker**, with zero failures, errors or skipped tests (AI: 14; Logic: 10; Data: 6; IO: 3; Main: 2). Earlier interactive checks on 11 October verified the CLI, a live Gemini assessment, recovery from HTTP 504, incident saving and JSON persistence after restart. **The newer 39-test version has passed locally but has not yet been verified inside Docker.** Rebuild the image and rerun the test suite before claiming 39/39 Docker success. Team members should also test the image on their own machines before submission.
+**Verified Docker CI result (12 October 2026):** GitHub Actions [run #13](https://github.com/2603229/INF1103_P3_T4/actions/runs/38265579783), commit `0d257d0`, built the Docker image and passed **all 40 tests inside Docker**, with zero failures, errors or skips (AI: 14; Logic: 10; Data: 9; IO: 4; Main: 3). The same 40 tests passed in the Python CI step. Earlier interactive checks (11 October) verified the CLI, live Gemini assessment, recovery from HTTP 504, saving and persistence after restart. These CI results do not replace the required live team demonstration on the submission machine.
+
+### Recommended assessment demonstration
+
+Use fictional test data and run the interactive CLI and dashboard with your private Gemini API key:
+
+```powershell
+docker build -t hazard-reporter .
+docker run -it --rm --init --env-file .env -p 8501:8501 -v hazard-data:/app/data -v hazard-uploads:/app/uploads hazard-reporter
+```
+
+Submit a wet-floor hazard, display the **validated Gemini assessment**, priority and assigned queue, confirm and record the generated incident ID. Open `http://localhost:8501` to show the saved record, change its status and export CSV/TXT. Exit with CLI option `4` before running a second container on port 8501.
+
+To demonstrate **C2 failure protection**, start an isolated container **without** the API key:
+
+```powershell
+docker run -it --rm --init -p 8501:8501 -v hazard-c2-demo:/app/data -v hazard-c2-uploads:/app/uploads hazard-reporter
+```
+
+Submit a valid fictional hazard. With no Gemini key supplied, the application should report that AI assessment is unavailable and **not save an incident**. The isolated `hazard-c2-demo` volume keeps this demonstration separate from normal report data.
 
 ### Run the CLI and dashboard
 
@@ -245,7 +263,7 @@ In **Windows PowerShell** (or a macOS/Linux terminal), from the project root wit
 docker run -it --rm --init --env-file .env -p 8501:8501 -v hazard-data:/app/data -v hazard-uploads:/app/uploads hazard-reporter
 ```
 
-The four-option CLI opens in the terminal. Visit **http://localhost:8501** to use the Streamlit dashboard. Select **option 4** in the CLI to exit. If you are testing only the offline fallback without an `.env` file, omit `--env-file .env`.
+The four-option CLI opens in the terminal. Visit **http://localhost:8501** to use the Streamlit dashboard. Select **option 4** in the CLI to exit. With no valid API key, the application still starts, but any new hazard submission stops safely without saving because C2 requires a valid Gemini assessment.
 
 ### Persistent data storage
 
@@ -283,9 +301,9 @@ The pipeline runs on **Ubuntu 24.04** with **Python 3.12** and automatically:
 1. Checks out the repository.
 2. Sets up Python and installs dependencies from `requirement.txt`.
 3. Verifies Python syntax.
-4. Runs the current **39 offline automated tests** once the updated test script is pushed.
+4. Runs the current **40 offline automated tests**.
 5. Builds the `hazard-reporter` Docker image.
-6. Runs the **39 tests again inside Docker** once the updated test script is pushed.
+6. Runs the same **40 tests again inside Docker**.
 
 Gemini API calls are mocked in the automated tests, so no live API key is required for CI.
 
@@ -294,18 +312,21 @@ Gemini API calls are mocked in the automated tests, so no live API key is requir
 | Item | Verified result |
 | --- | --- |
 | Workflow | INF1103 Team 4 CI Pipeline |
-| Run | #2 |
-| Date | 11 October 2026 |
+| Run | **#13** |
+| Date | **12 October 2026** |
 | Branch | `main` |
-| Commit | `75e3244` |
+| Commit | **`0d257d0`** |
 | Status | **Success** |
-| Total duration | 1 minute 10 seconds |
+| Python automated tests | **40/40 passed** |
+| Docker automated tests | **40/40 passed** |
+| Failures / errors / skipped | **0 / 0 / 0** |
+| Build and syntax verification | **Passed** |
 
 [View GitHub Actions runs](https://github.com/2603229/INF1103_P3_T4/actions).
 
-The verified run above belongs to an earlier version of the test suite. The **39-test update has not yet been confirmed successful in GitHub Actions**. This workflow provides automated **CI verification**; automatic deployment to a production server is not configured. Subsequent pushes should continue to pass the checks.
+GitHub Actions run #13 verified the latest 40-test version on commit `0d257d0`. Earlier runs remain in the Actions history. This workflow provides **continuous integration** (automated checks and Docker image build), not automatic deployment to a production server.
 
-## 🤖 AI assessment and fallback
+## 🤖 AI assessment and C2 failure handling
 
 The Gemini response is expected to contain these five string fields:
 
@@ -321,7 +342,7 @@ The Gemini response is expected to contain these five string fields:
 
 Each HTTP request is configured with a **60-second timeout**. The application handles rate-limit errors (429), retries some temporary failures (such as 503), and switches between configured models where appropriate. The timeout applies **per HTTP request**, not to the entire assessment workflow; retries and model fallback can extend total processing time.
 
-If the API is unavailable or returns an invalid assessment, the system generates a **provisional offline fallback** for human review. Its category can differ from the five allowed Gemini categories. A fallback triggered by an attached image **does not mean the image was analysed**. All assessments and routing recommendations require verification by authorised facilities personnel.
+If Gemini is unavailable or returns an invalid assessment, `logic_manager.py` may generate provisional fallback values internally; however, **`main.py` rejects these results and does not calculate priority or save the new incident**. An attached image is not analysed by any offline fallback. A valid Gemini response is essential to completing a submission (C2), and any successful AI assessment still requires human verification.
 
 ## 🚦 Priority and incident management
 
@@ -353,7 +374,7 @@ In the Streamlit dashboard, facilities staff can view incidents sorted by score,
 
 ## 🧪 Automated Testing
 
-The project includes `test_script.py`, containing **39 procedural offline automated tests** without class definitions.
+The project includes `test_script.py`, containing **40 procedural offline automated tests** without class definitions.
 
 | Test area | Tests | What is covered |
 | --- | ---: | --- |
@@ -361,8 +382,8 @@ The project includes `test_script.py`, containing **39 procedural offline automa
 | Logic Manager | 10 | Priority scoring, evaluation, historical-frequency filtering, duplicate detection, and fallback behaviour |
 | Data Manager | 9 | Database load/save, sequential and non-reused IDs, status updates, pre-deletion and pre-clear backups, failure protection, restoration, and malformed JSON handling |
 | IO Manager | 4 | Submission confirmation and image attachment confirmation input validation |
-| Main Workflow | 2 | Saving confirmed reports and not saving cancelled reports |
-| **Total** | **39** | **All 39 tests passed locally on 12 October 2026** |
+| Main Workflow | 3 | Saving valid confirmed reports, cancelling submissions and rejecting failed Gemini assessments (C2) |
+| **Total** | **40** | **All 40 tests passed in Python CI and Docker CI on 12 October 2026** |
 
 Run from the project root:
 
@@ -377,9 +398,9 @@ python test_script.py --details
 python test_script.py --no-data
 ```
 
-**Latest local verification (12 October 2026):** All **39 tests passed locally** (AI: 14; Logic: 10; Data: 9; IO: 4; Main: 2), with **zero failures, zero errors and zero skipped tests**. The reported runtime was **0.143 seconds**. The four added tests verify incident ID non-reuse after deletion/clearing, backup protection when clearing, programmatic restoration and invalid image confirmation responses.
+**Latest verified GitHub Actions run (12 October 2026, run #13, commit `0d257d0`):** All **40 tests passed both in the Python CI environment and inside Docker** (AI: 14; Logic: 10; Data: 9; IO: 4; Main: 3), with **zero failures, errors or skips**. The additional C2 test `test_ai_failure_prevents_submission()` checks that a failed Gemini assessment cannot create a saved incident. Other recent tests verify ID non-reuse, backup-before-clearing protection, database restoration and optional-image confirmation.
 
-Gemini requests are mocked, so automated tests do **not** require a live API key or network access. Data Manager tests use isolated temporary JSON files to avoid modifying the real incident database. **The latest 39-test suite has not yet been confirmed inside Docker or GitHub Actions.** The earlier **35-test Docker run (12 October 2026)** and **GitHub Actions CI run #2 (11 October 2026, commit `75e3244`, earlier test suite)** are historical verification results, not evidence of a successful 39-test Docker/CI run. Streamlit operations and optional image attachments should also be checked manually; an earlier demonstration verified the CLI, a live Gemini assessment and incident persistence.
+Gemini requests are mocked, so the automated tests do **not** require a live API key or network access. Database tests use temporary, isolated JSON storage. The CI checks do not prove the quality of real-world hazard classifications or the complete interactive Streamlit experience; those require a separate demonstration. For the C2 demonstration, start a test-only Docker container without `--env-file .env`, submit a sample hazard and verify that the application reports an AI error and creates no record.
 
 ## 👥 Created By
 
