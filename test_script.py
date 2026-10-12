@@ -162,8 +162,13 @@ def test_low_severity_and_minor_impact():
 
 def test_historical_frequency_case_insensitive():
     report = {'location': 'sit e6', 'asset_info': 'wet floor'}
-    previous = [{'location': 'SIT E6', 'asset_info': 'Wet Floor'}, {'location': 'SIT E6', 'asset_info': 'Aircon'}, {'location': 'SIT E6', 'asset_info': 'wet floor'}]
-    assert logic_manager.calculate_historical_frequency(report, previous) == 2
+    previous = [{'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'Resolved'}, {'location': 'SIT E6', 'asset_info': 'Aircon', 'status': 'Closed'}, {'location': 'SIT E6', 'asset_info': 'wet floor', 'status': 'In Progress'}]
+    assert logic_manager.calculate_historical_frequency(report, previous) == 1
+
+def test_historical_frequency_excludes_unresolved_incidents():
+    report = {'location': 'sit e6', 'asset_info': 'wet floor'}
+    previous = [{'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'Pending Review'}, {'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'In Progress'}, {'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'Resolved'}]
+    assert logic_manager.calculate_historical_frequency(report, previous) == 1
 
 def test_duplicate_pending_report():
     report = {'location': 'sit e6', 'asset_info': 'wet floor'}
