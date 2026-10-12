@@ -1,6 +1,6 @@
 """
 INF1103 Team 4 | Campus Safety Hazard Reporting System
-Procedural-only offline test script (39 tests; no class definitions).
+Procedural-only offline test script (40 tests; no class definitions).
 
 Run:
     python test_script.py
@@ -362,7 +362,10 @@ def test_image_attachment_reprompts_on_invalid_answer():
 # MAIN WORKFLOW TESTS
 
 
-def submit_with_mocks(confirm: bool):
+def submit_with_mocks(
+    confirm: bool,
+    assessment_source: str = "Gemini AI"
+):
     """
     Simulates hazard report submission using mocked dependencies.
     Tests the submission workflow without calling Gemini
@@ -394,8 +397,14 @@ def submit_with_mocks(confirm: bool):
             return_value=True
         ) as mock_save,
         patch.object(
-            main, "run_ai_assessment",
-            return_value=(dict(VALID_ASSESSMENT), "Gemini AI")
+            main,
+            "run_ai_assessment",
+            return_value=(
+                dict(VALID_ASSESSMENT)
+                if assessment_source == "Gemini AI"
+                else logic_manager.handle_ai_failure(report),
+                assessment_source
+            )
         ),
     ):
         main.submit_hazard_report()
@@ -414,6 +423,25 @@ def test_confirm_saves_one_complete_record():
     assert report['final_priority'] == 'High'
     assert report['assessment_source'] == 'Gemini AI'
 
+def test_ai_failure_prevents_submission():
+    """
+    Verify C2: A hazard report must not be saved
+    when Gemini AI assessment is unavailable.
+    """
+
+    saves, report = submit_with_mocks(
+        True,
+        assessment_source="Offline Fallback"
+    )
+
+    # No incident should be saved without successful AI.
+    assert saves == 0
+
+    # Priority calculation should not proceed.
+    assert "final_priority" not in report
+
+    # No incident ID should be assigned.
+    assert "incident_id" not in report
 
 # Group functions instead of TestCase classes to maintain procedural code.
 TEST_GROUPS = (
@@ -421,7 +449,7 @@ TEST_GROUPS = (
     ('Logic Manager', (test_score_for_high_moderate_hazard, test_high_severity_triggers_high_priority, test_critical_severity_and_severe_impact, test_low_severity_and_minor_impact, test_historical_frequency_case_insensitive, test_historical_frequency_excludes_unresolved_incidents, test_duplicate_pending_report, test_resolved_incident_is_not_active_duplicate, test_offline_fallback_when_ai_returns_error, test_valid_mocked_ai_response_used,)),
     ('Data Manager', (test_initial_database_is_empty, test_save_then_load_preserves_reporter_name, test_incident_ids_are_sequential, test_update_status, test_delete_incident, test_incident_id_not_reused_after_deletion, test_clear_database_creates_backup_or_cancels, test_restore_backup_restores_deleted_incident, test_corrupt_json_database_is_detected,)),
     ('IO Manager', (test_confirm_yes, test_cancel_no, test_invalid_answer_then_yes, test_image_attachment_reprompts_on_invalid_answer,)),
-    ('Main Workflow', (test_cancel_does_not_save, test_confirm_saves_one_complete_record,)),
+    ('Main Workflow', (test_cancel_does_not_save, test_confirm_saves_one_complete_record,test_ai_failure_prevents_submission,)),
  )
 
 

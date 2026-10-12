@@ -222,6 +222,13 @@ def submit_hazard_report() -> None:
 )
 
     ai_result, assessment_source = run_ai_assessment(record)
+    # Offline fallback results must not create a new incident.
+    if assessment_source != "Gemini AI":
+        IO_Manager.display_message(
+            "[Error] Gemini AI assessment is unavailable.\n"
+            "The hazard report was not saved. Please try again later."
+        )
+        return
 
     # Add only the expected assessment fields to the record
     for key in AI_FIELDS:
