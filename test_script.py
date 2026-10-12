@@ -243,6 +243,22 @@ def test_delete_incident(db_path: str):
     assert Data_Manager.load() == []
 
 @isolated_db
+def test_restore_aborts_if_current_database_backup_fails(db_path: str):
+    assert db_path
+    current_records = [{'incident_id': 'INCIDENT-001'}]
+    restored_records = [{'incident_id': 'INCIDENT-002'}]
+    Path(db_path).write_text(json.dumps(current_records), encoding='utf-8')
+    backup_dir = Path(Data_Manager.get_backup_dir())
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / 'incidents_backup_test.json'
+    backup_path.write_text(json.dumps(restored_records), encoding='utf-8')
+
+    with patch.object(Data_Manager, 'create_backup', return_value=None):
+        assert not Data_Manager.restore_backup(str(backup_path))
+
+    assert Data_Manager.load() == current_records
+
+@isolated_db
 def test_corrupt_json_database_is_detected(db_path: str):
     assert db_path
     Path(db_path).write_text('not valid JSON', encoding='utf-8')
@@ -323,7 +339,7 @@ def test_confirm_saves_one_complete_record():
 TEST_GROUPS = (
     ('AI Manager', (test_valid_ai_assessment_is_accepted, test_missing_required_field_is_rejected, test_invalid_category_is_rejected, test_invalid_severity_is_rejected, test_invalid_impact_is_rejected, test_non_string_field_is_rejected, test_parse_valid_json, test_parse_markdown_fenced_json, test_parse_invalid_json, test_prompt_excludes_reporter_identity, test_missing_image_returns_no_image, test_unsupported_image_format_is_rejected, test_api_without_key_returns_controlled_error, test_api_success_without_network,)),
     ('Logic Manager', (test_score_for_high_moderate_hazard, test_high_severity_triggers_high_priority, test_critical_severity_and_severe_impact, test_low_severity_and_minor_impact, test_historical_frequency_case_insensitive, test_duplicate_pending_report, test_resolved_incident_is_not_active_duplicate, test_offline_fallback_when_ai_returns_error, test_valid_mocked_ai_response_used,)),
-    ('Data Manager', (test_initial_database_is_empty, test_save_then_load_preserves_reporter_name, test_incident_ids_are_sequential, test_update_status, test_delete_incident, test_corrupt_json_database_is_detected,)),
+    ('Data Manager', (test_initial_database_is_empty, test_save_then_load_preserves_reporter_name, test_incident_ids_are_sequential, test_update_status, test_delete_incident, test_restore_aborts_if_current_database_backup_fails, test_corrupt_json_database_is_detected,)),
     ('IO Manager', (test_confirm_yes, test_cancel_no, test_invalid_answer_then_yes,)),
     ('Main Workflow', (test_cancel_does_not_save, test_confirm_saves_one_complete_record,)),
  )

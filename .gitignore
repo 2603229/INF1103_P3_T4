@@ -18,6 +18,7 @@ hazard_reports.txt
 
 # Uploaded images
 uploads/
+backups/
 
 # Temporary files
 *.tmp

@@ -97,6 +97,28 @@ def incident_dashboard() -> None:
         else:
             st.error(message)
 
+    # ---- Restore backup ----
+    backups = Data_Manager.list_backups()
+    with st.expander("Restore from backup"):
+        if not backups:
+            st.info("No backups are available to restore.")
+        else:
+            st.caption(f"Newest snapshot: {os.path.basename(backups[0])}")
+            confirm_restore = st.checkbox(
+                "I understand this will replace the current incident database",
+                key="confirm_restore",
+            )
+            if st.button(
+                "Restore backup",
+                key="restore_backup",
+                disabled=not confirm_restore,
+            ):
+                if Data_Manager.restore_backup():
+                    set_flash("success", f"Restored incidents from {os.path.basename(backups[0])}.")
+                else:
+                    set_flash("error", "Backup restore failed. The database was not changed.")
+                st.rerun(scope="fragment")
+
     incidents = load_incidents()
     if incidents is None:
         return
