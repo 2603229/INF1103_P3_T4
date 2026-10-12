@@ -233,7 +233,7 @@ Run the procedural offline tests inside the image:
 docker run --rm hazard-reporter python test_script.py
 ```
 
-**Docker verification (11 October 2026):** The `hazard-reporter` image built successfully, and all **34 procedural automated tests passed inside Docker**, with zero failures, errors, or skipped tests. The interactive CLI, a live Gemini assessment, and JSON incident persistence across container restarts were also verified. Team members should still test the image on their own machines before submission.
+**Docker verification (12 October 2026):** The updated `hazard-reporter` image built successfully, and all **35 procedural automated tests passed locally and inside Docker**, with zero failures, errors or skipped tests (AI: 14; Logic: 10; Data: 6; IO: 3; Main: 2). Earlier interactive checks on 11 October verified the CLI, a live Gemini assessment, recovery from HTTP 504, incident saving and JSON persistence after restart. Team members should still test the image on their own machines before submission.
 
 ### Run the CLI and dashboard
 
@@ -372,7 +372,7 @@ python test_script.py --details
 python test_script.py --no-data
 ```
 
-Gemini calls are mocked so the test suite does **not** require a live API key or network access. Data Manager tests use temporary JSON files to avoid changing the actual incident database. The historical Docker demonstration passed 34 tests on 11 October 2026; after the latest merge, rerun the current **35-test** suite locally and inside Docker and confirm the updated GitHub Actions run. The 35 tests do **not** directly exercise restoration, so that operation needs a separate check if used. Streamlit operations and optional image attachments should also be checked manually; the CLI, a live Gemini assessment, and incident persistence were verified during the earlier Docker demonstration.
+Gemini calls are mocked so the test suite does **not** require a live API key or network access. Data Manager tests use temporary JSON files to avoid changing the actual incident database. On **12 October 2026**, all **35 tests passed locally and inside Docker**, with zero failures, errors or skipped tests. The tests include backup-before-deletion and simulated backup failure; they do **not** directly exercise restoration. The historical GitHub Actions CI run #2 (11 October 2026, commit `75e3244`) verified the earlier version; confirm the workflow for the latest pushed commit before claiming the updated CI run succeeded. Streamlit operations and optional image attachments should also be checked manually; the CLI, a live Gemini assessment and incident persistence were verified during an earlier Docker demonstration.
 
 ## 👥 Created By
 
