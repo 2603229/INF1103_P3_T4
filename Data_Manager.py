@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DB_FILENAME = "hazardreportdb.json"
+ID_COUNTER_FILENAME = ".incident_id_counter"
 
 BACKUP_FOLDER = "backups"
 BACKUP_PREFIX = "incidents_backup_"      # incidents_backup_20261009_101530.json
@@ -299,14 +300,22 @@ def build_final_record(
 # GENERATE INCIDENT ID
 # ============================================================
 
+
+def get_id_counter_path() -> str:
+    """Return the persistent incident ID counter path."""
+    return os.path.join(
+        os.path.dirname(get_db_path()),
+        ID_COUNTER_FILENAME
+    )
+
+
 def generate_incident_id(
     records: list[dict[str, Any]]
 ) -> str:
     """
-    Generates the next incident ID based on the highest
-    existing ID in hazardreportdb.json.
+    Generate the next ID using both the active database
+    and the persistent counter.
     """
-
     highest_id = 0
 
     for record in records:
@@ -318,8 +327,55 @@ def generate_incident_id(
             if number.isdigit():
                 highest_id = max(highest_id, int(number))
 
+    counter_path = get_id_counter_path()
+
+    if os.path.isfile(counter_path):
+        with open(counter_path, "r", encoding="utf-8") as file:
+            last_issued = file.read().strip()
+
+        if not last_issued.isdigit():
+            raise ValueError("Invalid incident ID counter")
+
+        highest_id = max(highest_id, int(last_issued))
+
     return f"INCIDENT-{highest_id + 1:03d}"
 
+
+def reserve_incident_id(
+    records: list[dict[str, Any]]
+) -> Optional[str]:
+    """
+    Reserve the next incident ID before saving.
+    This prevents reuse following deletion.
+    """
+    counter_path = get_id_counter_path()
+    temp_path = counter_path + ".tmp"
+
+    try:
+        next_id = generate_incident_id(records)
+
+        os.makedirs(
+            os.path.dirname(counter_path),
+            exist_ok=True
+        )
+
+        with open(temp_path, "w", encoding="utf-8") as file:
+            file.write(next_id[len("INCIDENT-"):])
+
+        os.replace(temp_path, counter_path)
+
+        return next_id
+
+    except (OSError, ValueError, UnicodeError) as error:
+        logger.error("Incident ID reservation failed: %s", error)
+
+        try:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        except OSError:
+            pass
+
+        return None
 
 # ============================================================
 # BACKUPS
@@ -480,7 +536,13 @@ def save(record: dict[str, Any]) -> bool:
         return False
 
     if not record.get("incident_id"):
-        record["incident_id"] = generate_incident_id(records)
+        new_id = reserve_incident_id(records)
+
+        if new_id is None:
+            logger.error("Unable to reserve incident ID.")
+            return False
+
+        record["incident_id"] = new_id
 
     if not record.get("timestamp"):
         record["timestamp"] = datetime.now().strftime(
@@ -615,20 +677,26 @@ def delete_incident_by_id(incident_id: str) -> bool:
 # CLEAR INCIDENT DATABASE
 # ============================================================
 
+
 def clear_database() -> bool:
     """
-    Clears all incidents (including their AI assessments).
+    Clear incident records only after a successful backup.
+    Preserve the incident ID counter.
     """
-
-    load()
+    records = load()
 
     if last_load_warning:
         return False
 
-    return write_json(
-        get_db_path(),
-        []
-    )
+    # Create a backup before clearing nonempty records
+    if records and create_backup("before-clear") is None:
+        logger.error(
+            "Database clearing cancelled: backup creation failed."
+        )
+        return False
+
+    # Do not reset the incident ID counter
+    return write_json(get_db_path(), [])
 
 
 # ============================================================
