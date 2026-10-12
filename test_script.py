@@ -1,6 +1,6 @@
 """
 INF1103 Team 4 | Campus Safety Hazard Reporting System
-Procedural-only offline test script (34 tests; no class definitions).
+Procedural-only offline test script (35 tests; no class definitions).
 
 Run:
     python test_script.py
@@ -162,8 +162,13 @@ def test_low_severity_and_minor_impact():
 
 def test_historical_frequency_case_insensitive():
     report = {'location': 'sit e6', 'asset_info': 'wet floor'}
-    previous = [{'location': 'SIT E6', 'asset_info': 'Wet Floor'}, {'location': 'SIT E6', 'asset_info': 'Aircon'}, {'location': 'SIT E6', 'asset_info': 'wet floor'}]
-    assert logic_manager.calculate_historical_frequency(report, previous) == 2
+    previous = [{'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'Resolved'}, {'location': 'SIT E6', 'asset_info': 'Aircon', 'status': 'Closed'}, {'location': 'SIT E6', 'asset_info': 'wet floor', 'status': 'In Progress'}]
+    assert logic_manager.calculate_historical_frequency(report, previous) == 1
+
+def test_historical_frequency_excludes_unresolved_incidents():
+    report = {'location': 'sit e6', 'asset_info': 'wet floor'}
+    previous = [{'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'Pending Review'}, {'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'In Progress'}, {'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'Resolved'}]
+    assert logic_manager.calculate_historical_frequency(report, previous) == 1
 
 def test_duplicate_pending_report():
     report = {'location': 'sit e6', 'asset_info': 'wet floor'}
@@ -353,7 +358,7 @@ def test_confirm_saves_one_complete_record():
 # Group functions instead of TestCase classes to maintain procedural code.
 TEST_GROUPS = (
     ('AI Manager', (test_valid_ai_assessment_is_accepted, test_missing_required_field_is_rejected, test_invalid_category_is_rejected, test_invalid_severity_is_rejected, test_invalid_impact_is_rejected, test_non_string_field_is_rejected, test_parse_valid_json, test_parse_markdown_fenced_json, test_parse_invalid_json, test_prompt_excludes_reporter_identity, test_missing_image_returns_no_image, test_unsupported_image_format_is_rejected, test_api_without_key_returns_controlled_error, test_api_success_without_network,)),
-    ('Logic Manager', (test_score_for_high_moderate_hazard, test_high_severity_triggers_high_priority, test_critical_severity_and_severe_impact, test_low_severity_and_minor_impact, test_historical_frequency_case_insensitive, test_duplicate_pending_report, test_resolved_incident_is_not_active_duplicate, test_offline_fallback_when_ai_returns_error, test_valid_mocked_ai_response_used,)),
+    ('Logic Manager', (test_score_for_high_moderate_hazard, test_high_severity_triggers_high_priority, test_critical_severity_and_severe_impact, test_low_severity_and_minor_impact, test_historical_frequency_case_insensitive, test_historical_frequency_excludes_unresolved_incidents, test_duplicate_pending_report, test_resolved_incident_is_not_active_duplicate, test_offline_fallback_when_ai_returns_error, test_valid_mocked_ai_response_used,)),
     ('Data Manager', (test_initial_database_is_empty, test_save_then_load_preserves_reporter_name, test_incident_ids_are_sequential, test_update_status, test_delete_incident, test_corrupt_json_database_is_detected,)),
     ('IO Manager', (test_confirm_yes, test_cancel_no, test_invalid_answer_then_yes,)),
     ('Main Workflow', (test_cancel_does_not_save, test_confirm_saves_one_complete_record,)),
