@@ -24,6 +24,8 @@ import os
 import json
 import csv
 import logging
+import re
+import shutil
 from datetime import datetime
 from typing import Any, Callable, Optional
 
@@ -37,6 +39,11 @@ logger = logging.getLogger(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DB_FILENAME = "hazardreportdb.json"
+
+BACKUP_FOLDER = "backups"
+BACKUP_PREFIX = "incidents_backup_"      # incidents_backup_20261009_101530.json
+MAX_BACKUPS = 30                         # oldest snapshots are deleted beyond this
+AUTO_BACKUP_INTERVAL_SECONDS = 3600      # automatic snapshots at most once an hour
 
 last_load_warning = ""
 
@@ -110,6 +117,17 @@ def get_db_path() -> str:
     return os.path.join(
         get_data_dir(),
         DB_FILENAME
+    )
+
+
+def get_backup_dir() -> str:
+    """
+    Returns the folder holding backup snapshots (next to the database).
+    """
+
+    return os.path.join(
+        os.path.dirname(get_db_path()),
+        BACKUP_FOLDER
     )
 
 
@@ -222,6 +240,7 @@ def load() -> list[dict[str, Any]]:
     except (
         OSError,
         json.JSONDecodeError,
+        UnicodeDecodeError,
         ValueError
     ) as error:
 
@@ -300,6 +319,128 @@ def generate_incident_id(
                 highest_id = max(highest_id, int(number))
 
     return f"INCIDENT-{highest_id + 1:03d}"
+
+
+# ============================================================
+# BACKUPS
+# ============================================================
+
+def list_backups() -> list[str]:
+    """
+    Full paths of the backup snapshots, newest first.
+    """
+
+    folder = get_backup_dir()
+
+    try:
+        names = [
+            name
+            for name in os.listdir(folder)
+            if name.startswith(BACKUP_PREFIX) and name.endswith(".json")
+        ]
+    except OSError:
+        return []
+
+    return [
+        os.path.join(folder, name)
+        for name in sorted(names, reverse=True)
+    ]
+
+
+def create_backup(label: str = "") -> Optional[str]:
+    """
+    Copies the database to
+    backups/incidents_backup_YYYYMMDD_HHMMSS[_label].json
+    and returns that path (None if there is no database yet or the
+    copy failed). Only the newest MAX_BACKUPS snapshots are kept.
+    """
+
+    source = get_db_path()
+
+    if not os.path.isfile(source):
+        return None
+
+    tag = re.sub(r"[^A-Za-z0-9_-]", "", label)
+
+    name = (
+        f"{BACKUP_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        f"{'_' + tag if tag else ''}.json"
+    )
+
+    destination = os.path.join(get_backup_dir(), name)
+
+    try:
+        os.makedirs(get_backup_dir(), exist_ok=True)
+        shutil.copy2(source, destination)
+
+    except OSError as error:
+        logger.error("Backup failed: %s", error)
+        return None
+
+    for old in list_backups()[MAX_BACKUPS:]:
+        try:
+            os.remove(old)
+        except OSError:
+            pass
+
+    return destination
+
+
+def _auto_backup() -> None:
+    """
+    Snapshot before a full rewrite, unless one was taken within
+    the last hour.
+    """
+
+    existing = list_backups()
+
+    if existing:
+        try:
+            age = datetime.now().timestamp() - os.path.getmtime(existing[0])
+        except OSError:
+            age = AUTO_BACKUP_INTERVAL_SECONDS
+
+        if age < AUTO_BACKUP_INTERVAL_SECONDS:
+            return
+
+    create_backup("auto")
+
+
+def _commit(records: list[dict[str, Any]]) -> bool:
+    """
+    Replaces the whole database with `records` (used by update, delete,
+    archive and import). A backup snapshot is taken first, at most
+    once an hour.
+    """
+
+    _auto_backup()
+
+    return write_json(get_db_path(), records)
+
+
+def restore_backup(path: Optional[str] = None) -> bool:
+    """
+    Replaces the database with a backup snapshot (the newest one if no
+    path is given). The file must be a JSON list of records, otherwise
+    nothing changes. The current database is snapshotted first, so a
+    restore can be undone.
+    """
+
+    backups = list_backups()
+    source = path or (backups[0] if backups else None)
+
+    if not source or not os.path.isfile(source):
+        logger.error("No backup file to restore from.")
+        return False
+
+    records = _read_list_file(source)
+
+    if records is None:
+        return False
+
+    create_backup("before-restore")
+
+    return write_json(get_db_path(), records)
 
 
 # ============================================================
@@ -439,6 +580,8 @@ def delete_incident_by_id(
 
     if last_load_warning:
         return False
+
+    create_backup("before-delete")
 
     updated_records = [
         record
