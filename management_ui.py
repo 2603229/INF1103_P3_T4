@@ -299,7 +299,7 @@ def incident_dashboard() -> None:
     with delete_col:
         st.markdown("**Delete incident**")
         confirm_delete = st.checkbox(
-            f"I understand {incident_id} will be permanently deleted",
+            f"I understand {incident_id} will be removed from the active database",
             key=f"confirm_delete_{incident_id}",
         )
         if st.button(

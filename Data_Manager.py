@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 DB_FILENAME = "hazardreportdb.json"
+ID_COUNTER_FILENAME = ".incident_id_counter"
 
 BACKUP_FOLDER = "backups"
 BACKUP_PREFIX = "incidents_backup_"      # incidents_backup_20261009_101530.json
@@ -299,14 +300,22 @@ def build_final_record(
 # GENERATE INCIDENT ID
 # ============================================================
 
+
+def get_id_counter_path() -> str:
+    """Return the persistent incident ID counter path."""
+    return os.path.join(
+        os.path.dirname(get_db_path()),
+        ID_COUNTER_FILENAME
+    )
+
+
 def generate_incident_id(
     records: list[dict[str, Any]]
 ) -> str:
     """
-    Generates the next incident ID based on the highest
-    existing ID in hazardreportdb.json.
+    Generate the next ID using both the active database
+    and the persistent counter.
     """
-
     highest_id = 0
 
     for record in records:
@@ -318,8 +327,55 @@ def generate_incident_id(
             if number.isdigit():
                 highest_id = max(highest_id, int(number))
 
+    counter_path = get_id_counter_path()
+
+    if os.path.isfile(counter_path):
+        with open(counter_path, "r", encoding="utf-8") as file:
+            last_issued = file.read().strip()
+
+        if not last_issued.isdigit():
+            raise ValueError("Invalid incident ID counter")
+
+        highest_id = max(highest_id, int(last_issued))
+
     return f"INCIDENT-{highest_id + 1:03d}"
 
+
+def reserve_incident_id(
+    records: list[dict[str, Any]]
+) -> Optional[str]:
+    """
+    Reserve the next incident ID before saving.
+    This prevents reuse following deletion.
+    """
+    counter_path = get_id_counter_path()
+    temp_path = counter_path + ".tmp"
+
+    try:
+        next_id = generate_incident_id(records)
+
+        os.makedirs(
+            os.path.dirname(counter_path),
+            exist_ok=True
+        )
+
+        with open(temp_path, "w", encoding="utf-8") as file:
+            file.write(next_id[len("INCIDENT-"):])
+
+        os.replace(temp_path, counter_path)
+
+        return next_id
+
+    except (OSError, ValueError, UnicodeError) as error:
+        logger.error("Incident ID reservation failed: %s", error)
+
+        try:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+        except OSError:
+            pass
+
+        return None
 
 # ============================================================
 # BACKUPS
@@ -363,7 +419,7 @@ def create_backup(label: str = "") -> Optional[str]:
     tag = re.sub(r"[^A-Za-z0-9_-]", "", label)
 
     name = (
-        f"{BACKUP_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        f"{BACKUP_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
         f"{'_' + tag if tag else ''}.json"
     )
 
@@ -418,33 +474,41 @@ def _commit(records: list[dict[str, Any]]) -> bool:
     return write_json(get_db_path(), records)
 
 
+
 def restore_backup(path: Optional[str] = None) -> bool:
     """
-    Replaces the database with a backup snapshot (the newest one if no
-    path is given). The file must be a JSON list of records, otherwise
-    nothing changes. The current database is snapshotted first, so a
-    restore can be undone.
+    Restores the incident database from a backup snapshot.
+
+    Creates a safety backup of the existing database
+    before restoring. If any operation fails, restoration
+    is cancelled.
     """
 
     backups = list_backups()
     source = path or (backups[0] if backups else None)
 
+    # Check whether the backup file exists
     if not source or not os.path.isfile(source):
         logger.error("No backup file to restore from.")
         return False
 
+    # Read and validate the backup file
     try:
         records = read_json(source)
-    except (OSError, json.JSONDecodeError, UnicodeDecodeError, ValueError) as error:
-        logger.error("Backup file could not be read: %s", error)
+    except (OSError, ValueError, UnicodeError) as error:
+        logger.error("Unable to restore backup: %s", error)
         return False
 
-    if os.path.isfile(get_db_path()) and not create_backup("before-restore"):
-        logger.error("Current database could not be backed up; restore cancelled.")
-        return False
+    # Create a safety backup of the current database
+    if os.path.isfile(get_db_path()):
+        if create_backup("before-restore") is None:
+            logger.error(
+                "Restoration cancelled: safety backup failed."
+            )
+            return False
 
+    # Restore the backup into the main database
     return write_json(get_db_path(), records)
-
 
 # ============================================================
 # SAVE INCIDENT (INPUT + AI ASSESSMENT + DECISION)
@@ -472,7 +536,13 @@ def save(record: dict[str, Any]) -> bool:
         return False
 
     if not record.get("incident_id"):
-        record["incident_id"] = generate_incident_id(records)
+        new_id = reserve_incident_id(records)
+
+        if new_id is None:
+            logger.error("Unable to reserve incident ID.")
+            return False
+
+        record["incident_id"] = new_id
 
     if not record.get("timestamp"):
         record["timestamp"] = datetime.now().strftime(
@@ -572,11 +642,11 @@ def update_incident_status(
 # DELETE INCIDENT
 # ============================================================
 
-def delete_incident_by_id(
-    incident_id: str
-) -> bool:
+
+def delete_incident_by_id(incident_id: str) -> bool:
     """
-    Deletes an incident (including its AI assessment) by ID.
+    Creates a database backup before deleting an incident.
+    If the backup fails, deletion is cancelled.
     """
 
     records = load()
@@ -584,41 +654,49 @@ def delete_incident_by_id(
     if last_load_warning:
         return False
 
-    create_backup("before-delete")
-
     updated_records = [
         record
         for record in records
         if record.get("incident_id") != incident_id
     ]
 
+    # Check that the incident exists before creating a backup
     if len(updated_records) == len(records):
         return False
 
-    return write_json(
-        get_db_path(),
-        updated_records
-    )
+    # Do not delete anything unless backup succeeds
+    if create_backup("before-delete") is None:
+        logger.error("Deletion cancelled: database backup failed.")
+        return False
+
+    return write_json(get_db_path(), updated_records)
+
 
 
 # ============================================================
 # CLEAR INCIDENT DATABASE
 # ============================================================
 
+
 def clear_database() -> bool:
     """
-    Clears all incidents (including their AI assessments).
+    Clear incident records only after a successful backup.
+    Preserve the incident ID counter.
     """
-
-    load()
+    records = load()
 
     if last_load_warning:
         return False
 
-    return write_json(
-        get_db_path(),
-        []
-    )
+    # Create a backup before clearing nonempty records
+    if records and create_backup("before-clear") is None:
+        logger.error(
+            "Database clearing cancelled: backup creation failed."
+        )
+        return False
+
+    # Do not reset the incident ID counter
+    return write_json(get_db_path(), [])
 
 
 # ============================================================

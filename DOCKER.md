@@ -51,14 +51,20 @@ The container has no graphical file picker, so the CLI asks for an image path in
 
 ## Data storage
 
-Incident records, exports and uploaded images are stored in Docker volumes, so they are kept between container runs.
+Incident records, exports, private database backups and uploaded images are stored in Docker volumes, so they are kept between container runs.
 
 | Volume | Contents |
 | --- | --- |
-| `hazard-data` | `hazardreportdb.json` and CSV/TXT exports |
+| `hazard-data` | `hazardreportdb.json`, CSV/TXT exports and private `backups/` snapshots |
 | `hazard-uploads` | Attached hazard images |
 
-To delete all stored data and start fresh:
+### Database backup and recovery
+
+Before deleting an existing incident, `Data_Manager.py` creates a timestamped snapshot of the complete database under `/app/data/backups/`. If backup creation fails, deletion is cancelled. Up to 30 snapshots are kept. Backups persist in the `hazard-data` volume across container restarts.
+
+Restoring a snapshot is supported through `Data_Manager.restore_backup()` in Python code, but there is no dashboard restoration button. No hourly backup scheduler is active. Backups may contain reporter details; treat them as private data and never commit them to Git.
+
+**Warning:** Removing `hazard-data` removes the active database **and all backups**. To delete all stored data and start fresh:
 
 ```bash
 docker volume rm hazard-data hazard-uploads

@@ -1,6 +1,6 @@
 """
 INF1103 Team 4 | Campus Safety Hazard Reporting System
-Procedural-only offline test script (34 tests; no class definitions).
+Procedural-only offline test script (39 tests; no class definitions).
 
 Run:
     python test_script.py
@@ -162,8 +162,13 @@ def test_low_severity_and_minor_impact():
 
 def test_historical_frequency_case_insensitive():
     report = {'location': 'sit e6', 'asset_info': 'wet floor'}
-    previous = [{'location': 'SIT E6', 'asset_info': 'Wet Floor'}, {'location': 'SIT E6', 'asset_info': 'Aircon'}, {'location': 'SIT E6', 'asset_info': 'wet floor'}]
-    assert logic_manager.calculate_historical_frequency(report, previous) == 2
+    previous = [{'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'Resolved'}, {'location': 'SIT E6', 'asset_info': 'Aircon', 'status': 'Closed'}, {'location': 'SIT E6', 'asset_info': 'wet floor', 'status': 'In Progress'}]
+    assert logic_manager.calculate_historical_frequency(report, previous) == 1
+
+def test_historical_frequency_excludes_unresolved_incidents():
+    report = {'location': 'sit e6', 'asset_info': 'wet floor'}
+    previous = [{'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'Pending Review'}, {'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'In Progress'}, {'location': 'SIT E6', 'asset_info': 'Wet Floor', 'status': 'Resolved'}]
+    assert logic_manager.calculate_historical_frequency(report, previous) == 1
 
 def test_duplicate_pending_report():
     report = {'location': 'sit e6', 'asset_info': 'wet floor'}
@@ -227,36 +232,94 @@ def test_update_status(db_path: str):
     assert Data_Manager.update_incident_status(incident_id, 'Resolved')
     assert Data_Manager.load()[0]['status'] == 'Resolved'
 
+
 @isolated_db
 def test_delete_incident(db_path: str):
     assert db_path
+
+    # Test 1: Successful deletion creates a backup
     report = sample_record()
     assert Data_Manager.save(report)
-    incident_id = report['incident_id']
+
+    incident_id = report["incident_id"]
     assert isinstance(incident_id, str)
+
     assert not Data_Manager.list_backups()
+
     assert Data_Manager.delete_incident_by_id(incident_id)
+
     backups = Data_Manager.list_backups()
     assert len(backups) == 1
-    backup_records = json.loads(Path(backups[0]).read_text(encoding='utf-8'))
-    assert backup_records[0]['incident_id'] == incident_id
+
+    backup_records = json.loads(
+        Path(backups[0]).read_text(encoding="utf-8")
+    )
+
+    assert backup_records[0]["incident_id"] == incident_id
     assert Data_Manager.load() == []
 
+    # Test 2: A failed backup must prevent deletion
+    second = sample_record()
+    assert Data_Manager.save(second)
+
+    second_id = second["incident_id"]
+    assert isinstance(second_id, str)
+
+    with patch.object(
+        Data_Manager.shutil,
+        "copy2",
+        side_effect=OSError("Simulated backup failure")
+    ):
+        assert not Data_Manager.delete_incident_by_id(second_id)
+
+    # The incident must still exist
+    assert Data_Manager.get_incident_by_id(second_id) is not None
+
+    # No additional backup should have been created
+    assert len(Data_Manager.list_backups()) == 1
+
 @isolated_db
-def test_restore_aborts_if_current_database_backup_fails(db_path: str):
+def test_incident_id_not_reused_after_deletion(db_path: str):
+    """Deletion and clearing must not reset the persistent ID counter."""
     assert db_path
-    current_records = [{'incident_id': 'INCIDENT-001'}]
-    restored_records = [{'incident_id': 'INCIDENT-002'}]
-    Path(db_path).write_text(json.dumps(current_records), encoding='utf-8')
-    backup_dir = Path(Data_Manager.get_backup_dir())
-    backup_dir.mkdir(parents=True, exist_ok=True)
-    backup_path = backup_dir / 'incidents_backup_test.json'
-    backup_path.write_text(json.dumps(restored_records), encoding='utf-8')
+    first, second, third, fourth = (sample_record() for _ in range(4))
+    assert Data_Manager.save(first)
+    assert Data_Manager.save(second)
+    assert Data_Manager.delete_incident_by_id(second["incident_id"])
+    assert Data_Manager.save(third)
+    assert third["incident_id"] == "INCIDENT-003"
+    assert Data_Manager.clear_database()
+    assert Data_Manager.save(fourth)
+    assert fourth["incident_id"] == "INCIDENT-004"
 
-    with patch.object(Data_Manager, 'create_backup', return_value=None):
-        assert not Data_Manager.restore_backup(str(backup_path))
 
-    assert Data_Manager.load() == current_records
+@isolated_db
+def test_clear_database_creates_backup_or_cancels(db_path: str):
+    assert db_path
+    first = sample_record()
+    assert Data_Manager.save(first)
+    assert Data_Manager.clear_database()
+    assert Data_Manager.load() == []
+    assert any("before-clear" in path for path in Data_Manager.list_backups())
+
+    second = sample_record()
+    assert Data_Manager.save(second)
+    with patch.object(Data_Manager.shutil, "copy2", side_effect=OSError("Backup failure")):
+        assert not Data_Manager.clear_database()
+    assert Data_Manager.get_incident_by_id(second["incident_id"]) is not None
+
+
+@isolated_db
+def test_restore_backup_restores_deleted_incident(db_path: str):
+    assert db_path
+    report = sample_record()
+    assert Data_Manager.save(report)
+    incident_id = report["incident_id"]
+    assert Data_Manager.delete_incident_by_id(incident_id)
+    backup = Data_Manager.list_backups()[0]
+    assert Data_Manager.restore_backup(backup)
+    assert Data_Manager.get_incident_by_id(incident_id) is not None
+    assert len(Data_Manager.list_backups()) == 2  # safety backup before restore
 
 @isolated_db
 def test_corrupt_json_database_is_detected(db_path: str):
@@ -278,6 +341,23 @@ def test_cancel_no():
 def test_invalid_answer_then_yes():
     with patch('builtins.input', side_effect=['maybe', 'y']), patch('builtins.print'):
         assert IO_Manager.confirm_submission()
+
+
+def test_image_attachment_reprompts_on_invalid_answer():
+    """Invalid image confirmation answers must be rejected."""
+
+    with patch(
+        "builtins.input",
+        side_effect=["maybe", "YES"]
+    ), patch("builtins.print"):
+        assert IO_Manager.confirm_image_attachment() is True
+
+    with patch(
+        "builtins.input",
+        side_effect=["invalid", "n"]
+    ), patch("builtins.print"):
+        assert IO_Manager.confirm_image_attachment() is False
+
 
 # MAIN WORKFLOW TESTS
 
@@ -338,9 +418,9 @@ def test_confirm_saves_one_complete_record():
 # Group functions instead of TestCase classes to maintain procedural code.
 TEST_GROUPS = (
     ('AI Manager', (test_valid_ai_assessment_is_accepted, test_missing_required_field_is_rejected, test_invalid_category_is_rejected, test_invalid_severity_is_rejected, test_invalid_impact_is_rejected, test_non_string_field_is_rejected, test_parse_valid_json, test_parse_markdown_fenced_json, test_parse_invalid_json, test_prompt_excludes_reporter_identity, test_missing_image_returns_no_image, test_unsupported_image_format_is_rejected, test_api_without_key_returns_controlled_error, test_api_success_without_network,)),
-    ('Logic Manager', (test_score_for_high_moderate_hazard, test_high_severity_triggers_high_priority, test_critical_severity_and_severe_impact, test_low_severity_and_minor_impact, test_historical_frequency_case_insensitive, test_duplicate_pending_report, test_resolved_incident_is_not_active_duplicate, test_offline_fallback_when_ai_returns_error, test_valid_mocked_ai_response_used,)),
-    ('Data Manager', (test_initial_database_is_empty, test_save_then_load_preserves_reporter_name, test_incident_ids_are_sequential, test_update_status, test_delete_incident, test_restore_aborts_if_current_database_backup_fails, test_corrupt_json_database_is_detected,)),
-    ('IO Manager', (test_confirm_yes, test_cancel_no, test_invalid_answer_then_yes,)),
+    ('Logic Manager', (test_score_for_high_moderate_hazard, test_high_severity_triggers_high_priority, test_critical_severity_and_severe_impact, test_low_severity_and_minor_impact, test_historical_frequency_case_insensitive, test_historical_frequency_excludes_unresolved_incidents, test_duplicate_pending_report, test_resolved_incident_is_not_active_duplicate, test_offline_fallback_when_ai_returns_error, test_valid_mocked_ai_response_used,)),
+    ('Data Manager', (test_initial_database_is_empty, test_save_then_load_preserves_reporter_name, test_incident_ids_are_sequential, test_update_status, test_delete_incident, test_incident_id_not_reused_after_deletion, test_clear_database_creates_backup_or_cancels, test_restore_backup_restores_deleted_incident, test_corrupt_json_database_is_detected,)),
+    ('IO Manager', (test_confirm_yes, test_cancel_no, test_invalid_answer_then_yes, test_image_attachment_reprompts_on_invalid_answer,)),
     ('Main Workflow', (test_cancel_does_not_save, test_confirm_saves_one_complete_record,)),
  )
 
@@ -414,6 +494,6 @@ def run_tests(show_details: bool = False, include_data: bool = True):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run procedural INF1103 offline tests")
     parser.add_argument("--details", action="store_true", help="Show every test result")
-    parser.add_argument("--no-data", action="store_true", help="Exclude six database tests")
+    parser.add_argument("--no-data", action="store_true", help="Exclude nine database tests")
     options = parser.parse_args()
     sys.exit(0 if run_tests(options.details, not options.no_data) else 1)

@@ -48,6 +48,28 @@ def display_menu() -> str:
 # It specifies that the function returns a dictionary (dict) with specific types for its keys and values:
 #   str (Key Type): All keys in the dictionary must be strings.
 #   Any (Value Type): The values inside the dictionary can be of any data type (e.g., strings, numbers, booleans, lists).
+
+def confirm_image_attachment() -> bool:
+    """Ask whether to attach an image and validate the answer."""
+
+    print("\nWould you like to attach an image of the hazard?")
+
+    while True:
+        try:
+            choice = input("Attach image? (y/n): ").strip().lower()
+
+        except (KeyboardInterrupt, EOFError):
+            print("[Info] Continuing without image.")
+            return False
+
+        if choice in ("y", "yes"):
+            return True
+
+        if choice in ("n", "no"):
+            return False
+
+        print("[Error] Please enter y or n.")
+
 def get_user_input() -> dict[str, Any]:
 
     # Print Header for New Hazard Report Submission
@@ -165,11 +187,9 @@ def get_user_input() -> dict[str, Any]:
     # Step 8: Handle optional image attachment
     # Copy the selected image to the uploads/ directory.
     # Store its relative file path instead of embedding Base64 data in JSON.
-    print("\nWould you like to attach an image of the hazard?")
-    attach_choice = input("Attach image? (y/n): ").strip().lower()
-
     image_path = ""
-    if attach_choice in ["y", "yes"]:
+
+    if confirm_image_attachment():
         image_path = select_image_via_dialog()
 
 

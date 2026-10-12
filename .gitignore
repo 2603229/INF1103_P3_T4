@@ -22,3 +22,12 @@ backups/
 
 # Temporary files
 *.tmp
+
+# Automatic database backups (contain private incident records)
+backups/
+
+# Local image evidence used for testing and Docker
+evidence/
+
+# Persistent incident ID counter
+.incident_id_counter

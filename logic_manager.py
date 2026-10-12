@@ -100,32 +100,40 @@ def process_record(record: dict[str, Any]) -> dict[str, Any]:
 
     return handle_ai_failure(record)
 
+
 def calculate_historical_frequency(
     record: dict[str, Any],
     existing_records: list[dict[str, Any]]
 ) -> int:
     """
-    Counts previous reports involving the same location
-    and asset.
+    Counts previous resolved or closed incidents
+    involving the same location and asset.
     """
 
     frequency = 0
 
     for existing in existing_records:
         same_location = (
-            str(record.get("location", "")).strip().lower()
-            == str(existing.get("location", "")).strip().lower()
+            str(record.get("location") or "").strip().lower()
+            == str(existing.get("location") or "").strip().lower()
         )
 
         same_asset = (
-            str(record.get("asset_info", "")).strip().lower()
-            == str(existing.get("asset_info", "")).strip().lower()
+            str(record.get("asset_info") or "").strip().lower()
+            == str(existing.get("asset_info") or "").strip().lower()
         )
 
-        if same_location and same_asset:
+        status = str(
+            existing.get("status") or ""
+        ).strip().lower()
+
+        is_resolved = status in ("resolved", "closed")
+
+        if same_location and same_asset and is_resolved:
             frequency += 1
 
     return frequency
+
 
 def calculate_score_breakdown(record: dict[str, Any]) -> dict[str, int]:
     """
