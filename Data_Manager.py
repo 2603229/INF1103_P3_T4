@@ -363,7 +363,7 @@ def create_backup(label: str = "") -> Optional[str]:
     tag = re.sub(r"[^A-Za-z0-9_-]", "", label)
 
     name = (
-        f"{BACKUP_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        f"{BACKUP_PREFIX}{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}"
         f"{'_' + tag if tag else ''}.json"
     )
 
@@ -418,30 +418,41 @@ def _commit(records: list[dict[str, Any]]) -> bool:
     return write_json(get_db_path(), records)
 
 
+
 def restore_backup(path: Optional[str] = None) -> bool:
     """
-    Replaces the database with a backup snapshot (the newest one if no
-    path is given). The file must be a JSON list of records, otherwise
-    nothing changes. The current database is snapshotted first, so a
-    restore can be undone.
+    Restores the incident database from a backup snapshot.
+
+    Creates a safety backup of the existing database
+    before restoring. If any operation fails, restoration
+    is cancelled.
     """
 
     backups = list_backups()
     source = path or (backups[0] if backups else None)
 
+    # Check whether the backup file exists
     if not source or not os.path.isfile(source):
         logger.error("No backup file to restore from.")
         return False
 
-    records = _read_list_file(source)
-
-    if records is None:
+    # Read and validate the backup file
+    try:
+        records = read_json(source)
+    except (OSError, ValueError, UnicodeError) as error:
+        logger.error("Unable to restore backup: %s", error)
         return False
 
-    create_backup("before-restore")
+    # Create a safety backup of the current database
+    if os.path.isfile(get_db_path()):
+        if create_backup("before-restore") is None:
+            logger.error(
+                "Restoration cancelled: safety backup failed."
+            )
+            return False
 
+    # Restore the backup into the main database
     return write_json(get_db_path(), records)
-
 
 # ============================================================
 # SAVE INCIDENT (INPUT + AI ASSESSMENT + DECISION)
@@ -569,11 +580,11 @@ def update_incident_status(
 # DELETE INCIDENT
 # ============================================================
 
-def delete_incident_by_id(
-    incident_id: str
-) -> bool:
+
+def delete_incident_by_id(incident_id: str) -> bool:
     """
-    Deletes an incident (including its AI assessment) by ID.
+    Creates a database backup before deleting an incident.
+    If the backup fails, deletion is cancelled.
     """
 
     records = load()
@@ -581,21 +592,23 @@ def delete_incident_by_id(
     if last_load_warning:
         return False
 
-    create_backup("before-delete")
-
     updated_records = [
         record
         for record in records
         if record.get("incident_id") != incident_id
     ]
 
+    # Check that the incident exists before creating a backup
     if len(updated_records) == len(records):
         return False
 
-    return write_json(
-        get_db_path(),
-        updated_records
-    )
+    # Do not delete anything unless backup succeeds
+    if create_backup("before-delete") is None:
+        logger.error("Deletion cancelled: database backup failed.")
+        return False
+
+    return write_json(get_db_path(), updated_records)
+
 
 
 # ============================================================

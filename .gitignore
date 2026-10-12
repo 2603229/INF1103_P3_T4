@@ -21,3 +21,9 @@ uploads/
 
 # Temporary files
 *.tmp
+
+# Automatic database backups (contain private incident records)
+backups/
+
+# Local image evidence used for testing and Docker
+evidence/

@@ -227,20 +227,51 @@ def test_update_status(db_path: str):
     assert Data_Manager.update_incident_status(incident_id, 'Resolved')
     assert Data_Manager.load()[0]['status'] == 'Resolved'
 
+
 @isolated_db
 def test_delete_incident(db_path: str):
     assert db_path
+
+    # Test 1: Successful deletion creates a backup
     report = sample_record()
     assert Data_Manager.save(report)
-    incident_id = report['incident_id']
+
+    incident_id = report["incident_id"]
     assert isinstance(incident_id, str)
+
     assert not Data_Manager.list_backups()
+
     assert Data_Manager.delete_incident_by_id(incident_id)
+
     backups = Data_Manager.list_backups()
     assert len(backups) == 1
-    backup_records = json.loads(Path(backups[0]).read_text(encoding='utf-8'))
-    assert backup_records[0]['incident_id'] == incident_id
+
+    backup_records = json.loads(
+        Path(backups[0]).read_text(encoding="utf-8")
+    )
+
+    assert backup_records[0]["incident_id"] == incident_id
     assert Data_Manager.load() == []
+
+    # Test 2: A failed backup must prevent deletion
+    second = sample_record()
+    assert Data_Manager.save(second)
+
+    second_id = second["incident_id"]
+    assert isinstance(second_id, str)
+
+    with patch.object(
+        Data_Manager.shutil,
+        "copy2",
+        side_effect=OSError("Simulated backup failure")
+    ):
+        assert not Data_Manager.delete_incident_by_id(second_id)
+
+    # The incident must still exist
+    assert Data_Manager.get_incident_by_id(second_id) is not None
+
+    # No additional backup should have been created
+    assert len(Data_Manager.list_backups()) == 1
 
 @isolated_db
 def test_corrupt_json_database_is_detected(db_path: str):
