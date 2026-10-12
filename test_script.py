@@ -234,7 +234,12 @@ def test_delete_incident(db_path: str):
     assert Data_Manager.save(report)
     incident_id = report['incident_id']
     assert isinstance(incident_id, str)
+    assert not Data_Manager.list_backups()
     assert Data_Manager.delete_incident_by_id(incident_id)
+    backups = Data_Manager.list_backups()
+    assert len(backups) == 1
+    backup_records = json.loads(Path(backups[0]).read_text(encoding='utf-8'))
+    assert backup_records[0]['incident_id'] == incident_id
     assert Data_Manager.load() == []
 
 @isolated_db
