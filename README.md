@@ -43,6 +43,7 @@ The original proposal specified five main inputs: **location**, **visual evidenc
 - **🚦 Priority and routing:** Calculates a priority score, recommends an action, and assigns a maintenance or urgent-dispatch queue label.
 - **🔎 Recurring-hazard checks:** Compares new reports with historical records to identify repeated location/asset combinations and potential duplicates.
 - **🗃️ Incident history:** Saves each completed report, including the original inputs, assessment, decision, ID, timestamp, and status, in `hazardreportdb.json`.
+- **🗂️ Backups before deletion:** Before removing an existing incident, Data Manager saves a timestamped snapshot of the complete JSON database. If the backup cannot be created, deletion is cancelled. Up to 30 recent backups are retained in a private `backups/` folder.
 - **🖥️ Facilities management UI:** Provides a Streamlit dashboard for incident review, status updates, deletion, and CSV/TXT exports.
 - **🔄 Automatic dashboard refresh:** A Streamlit fragment reloads incident records approximately every 2 seconds, allowing CLI submissions and management changes to appear without manually refreshing the page.
 - **📄 Readable TXT reports:** The improved export generates separate, labelled sections for each incident instead of CSV-formatted text.
@@ -55,9 +56,9 @@ The original proposal specified five main inputs: **location**, **visual evidenc
 ├── IO_Manager.py                 # Console menus, validation and image selection
 ├── ai_manager.py                 # Gemini requests, JSON parsing and validation
 ├── logic_manager.py              # Fallback, scoring, duplicates and routing
-├── Data_Manager.py               # Incident IDs, JSON storage, updates and exports
+├── Data_Manager.py               # Incident storage, backup/restore and exports
 ├── management_ui.py              # Streamlit incident management dashboard
-├── test_script.py                # 34 procedural offline automated tests
+├── test_script.py                # 35 procedural offline automated tests
 ├── requirement.txt               # Python dependencies (singular filename)
 ├── Dockerfile                    # Python 3.12 container configuration
 ├── .dockerignore                 # Excludes secrets/data from Docker build context
@@ -71,6 +72,7 @@ The original proposal specified five main inputs: **location**, **visual evidenc
 Generated locally (keep private; ensure these are excluded from Git tracking):
 ├── .env                          # Private Gemini API key; never commit
 ├── hazardreportdb.json           # Local incident database
+├── backups/                      # Private JSON database snapshots
 ├── uploads/                      # Optional hazard image attachments
 ├── evidence/                     # Optional local Docker image inputs (keep private)
 ├── hazard_reports.csv            # Generated CSV export
@@ -118,9 +120,9 @@ The application processes a report in this order:
 | `IO_Manager.py` | Displays the four-option CLI menu, validates reporter input, and uses Tkinter for optional image selection with a terminal fallback when no GUI is available. |
 | `ai_manager.py` | Builds the Gemini prompt, attaches supported image content, calls configured models, parses JSON, and validates expected response fields. |
 | `logic_manager.py` | Handles offline fallback, scoring, historical frequency, potential-duplicate detection, priority decisions, and routing. |
-| `Data_Manager.py` | Loads and saves the local JSON database, generates incident IDs, queries records, updates statuses, deletes records, and exports CSV/TXT files. |
+| `Data_Manager.py` | Loads and saves the local JSON database, generates incident IDs, updates and deletes records, takes pre-deletion backups, supports programmatic restoration, and exports CSV/TXT files. |
 | `management_ui.py` | Shows a Streamlit incident table and details, uses `Data_Manager.load()` for incident data, enables status changes and deletion, and provides exports, with an approximately 2-second automatic refresh. |
-| `test_script.py` | Runs 34 procedural offline automated tests, including mocked Gemini requests and temporary JSON databases. |
+| `test_script.py` | Runs 35 procedural offline automated tests, including mocked Gemini requests, historical-frequency checks and backup-failure protection. |
 
 ## ✅ Prerequisites
 
@@ -249,10 +251,10 @@ The container uses named Docker volumes to preserve application data between con
 
 | Volume | Container directory | Stored content |
 | --- | --- | --- |
-| `hazard-data` | `/app/data` | `hazardreportdb.json` and CSV/TXT exports |
+| `hazard-data` | `/app/data` | `hazardreportdb.json`, CSV/TXT exports and private `backups/` snapshots |
 | `hazard-uploads` | `/app/uploads` | Attached hazard images |
 
-Within Docker, `HAZARD_DATA_DIR=/app/data` ensures `Data_Manager.py` stores incident data in the mounted volume. The database is created when the first confirmed incident is saved if it does not already exist.
+Within Docker, `HAZARD_DATA_DIR=/app/data` ensures `Data_Manager.py` stores incident data and its `backups/` folder in the mounted volume. The database is created when the first confirmed incident is saved if it does not already exist. Backups survive container restarts but are deleted if the `hazard-data` volume is removed.
 
 ### Optional image attachments
 
@@ -260,7 +262,7 @@ Docker runs without a graphical file picker, so the CLI accepts an image path in
 
 ### Security
 
-The `.dockerignore` file keeps the private `.env`, local incident database, exports, uploaded evidence, Python caches, and other unnecessary files out of the Docker build context. The `.gitignore` file separately excludes local credentials and incident data from future Git tracking. Both files should exclude any `evidence/` directory containing private images; verify the ignore rules before committing.
+The `.dockerignore` file keeps the private `.env`, local incident database, `backups/`, exports, uploaded images, local `evidence/` and Python caches out of the Docker build context. The `.gitignore` file separately excludes local credentials and incident data (including backups) from future Git tracking. Confirm the ignore rules before committing.
 
 Never publish real API keys, reporter contact details, or incident images. Keeping files out of future commits does not erase them from earlier Git history.
 
@@ -279,9 +281,9 @@ The pipeline runs on **Ubuntu 24.04** with **Python 3.12** and automatically:
 1. Checks out the repository.
 2. Sets up Python and installs dependencies from `requirement.txt`.
 3. Verifies Python syntax.
-4. Runs all **34 offline automated tests**.
+4. Runs the current **35 offline automated tests**.
 5. Builds the `hazard-reporter` Docker image.
-6. Runs the **34 tests again inside Docker**.
+6. Runs the **35 tests again inside Docker**.
 
 Gemini API calls are mocked in the automated tests, so no live API key is required for CI.
 
@@ -321,13 +323,19 @@ If the API is unavailable or returns an invalid assessment, the system generates
 
 ## 🚦 Priority and incident management
 
-The Logic Manager calculates priority using three factors: **severity**, **operational impact**, and **historical frequency**. Severity contributes 1 (Low), 2 (Medium), 4 (High), or 5 (Critical) points. Operational impact contributes 1 (Minor), 2 (Moderate), 4 (Severe), or 5 (Catastrophic) points. Historical frequency adds 0–3 points based on the number of previous reports involving the same location and asset.
+The Logic Manager calculates priority using three factors: **severity**, **operational impact**, and **historical frequency**. Severity contributes 1 (Low), 2 (Medium), 4 (High), or 5 (Critical) points. Operational impact contributes 1 (Minor), 2 (Moderate), 4 (Severe), or 5 (Catastrophic) points. Historical frequency adds 0–3 points based on matching incidents at the same location and asset that have a **Resolved** or **Closed** status; unresolved incidents are checked separately for potential duplicates.
 
 The total score and business rules determine **Normal**, **High**, or **Critical** priority, along with a recommended action. The `route(record)` function assigns the appropriate maintenance or urgent-dispatch **queue label** based on the evaluated priority; it does not dispatch personnel. Duplicate detection flags matching unresolved incidents. `Resolved` and `Closed` reports are excluded from active duplicate checks but still count toward historical frequency.
 
 Each saved record includes an incident identifier, timestamp, reporter input, assessment source, assessment fields, duplicate/frequency information, score, recommended action, assigned route, and status. Data is stored in the local `hazardreportdb.json` file.
 
-In the Streamlit dashboard, facilities staff can view incidents sorted by score, inspect assessment details and image evidence where available, change a status among **Pending Review**, **In Progress**, **Resolved**, and **Closed**, delete a record after confirmation, and export incident records to **CSV** or **readable TXT**. The dashboard uses `@st.fragment(run_every="2s")` to reload data periodically. Status updates and deletions trigger an immediate fragment rerun. Generated downloads are retained in Streamlit session state so the download buttons remain available across automatic refreshes.
+In the Streamlit dashboard, facilities staff can view incidents sorted by score, inspect assessment details and image evidence where available, change a status among **Pending Review**, **In Progress**, **Resolved**, and **Closed**, delete a record after confirmation, and export incident records to **CSV** or **readable TXT**. A deletion creates a complete database backup first; the incident is not removed if backup creation fails. The dashboard uses `@st.fragment(run_every="2s")` to reload data periodically. Status updates and deletions trigger an immediate fragment rerun. Generated downloads are retained in Streamlit session state so the download buttons remain available across automatic refreshes.
+
+### Database backup and recovery
+
+`Data_Manager.delete_incident_by_id()` creates a timestamped `incidents_backup_*.json` snapshot **before** deleting an existing incident. The snapshot contains the entire database at that moment, including the incident that will be deleted. Backup creation must succeed before the deletion is saved. A maximum of **30 snapshots** is retained in `backups/`, beside the database file. These files may include private reporter details and must not be committed or shared.
+
+`Data_Manager.list_backups()` lists stored snapshots, and `Data_Manager.restore_backup()` can restore a snapshot **programmatically**, after creating a safety backup of the current database. The Streamlit dashboard does not currently offer a restore button. Hourly backup scheduling is not active; the implemented automatic trigger is incident deletion. Status updates and full-database clearing do not trigger this backup-before-deletion process.
 
 ## ⚙️ Configuration and data files
 
@@ -341,9 +349,45 @@ In the Streamlit dashboard, facilities staff can view incidents sorted by score,
 
 ## 🧪 Automated Testing
 
-The project includes `test_script.py`, containing **34 procedural offline automated tests** without class definitions.
+The project includes `test_script.py`, containing **35 procedural offline automated tests** without class definitions.
 
 | Test area | What is covered |
 | --- | --- |
 | AI Manager | Prompt creation, response validation, JSON parsing, and mocked API requests |
-| Logic Manager | Priority scoring, evaluation, duplicate detection
+| Logic Manager | Priority scoring, evaluation, historical-frequency filtering, duplicate detection, and fallback behaviour |
+| Data Manager | Database load/save, IDs, status updates, backup-before-deletion and simulated backup-failure protection, and malformed JSON handling |
+| IO Manager | Submission confirmation input handling |
+| Main workflow | Saving confirmed reports and not saving cancelled reports |
+
+Run from the project root:
+
+```bash
+python test_script.py
+```
+
+For individual test results, or to run without database tests:
+
+```bash
+python test_script.py --details
+python test_script.py --no-data
+```
+
+Gemini calls are mocked so the test suite does **not** require a live API key or network access. Data Manager tests use temporary JSON files to avoid changing the actual incident database. The historical Docker demonstration passed 34 tests on 11 October 2026; after the latest merge, rerun the current **35-test** suite locally and inside Docker and confirm the updated GitHub Actions run. The 35 tests do **not** directly exercise restoration, so that operation needs a separate check if used. Streamlit operations and optional image attachments should also be checked manually; the CLI, a live Gemini assessment, and incident persistence were verified during the earlier Docker demonstration.
+
+## 👥 Created By
+
+🎓 **INF1103 – Programming Fundamentals with DevOps**  
+🏫 **Team 4 | Singapore Institute of Technology (SIT)**
+
+### 👨‍💻 Team Members
+
+- CHAN RUI RU
+- CHEE BO YU
+- KOH KA-WEI DARRYL
+- CHUA QIN NI JAMIE
+- KHUN AUNG HEIN
+- CHIA SENG CHAN
+
+## 🔗 Repository
+
+[INF1103 Team 4 – GitHub](https://github.com/2603229/INF1103_P3_T4)
