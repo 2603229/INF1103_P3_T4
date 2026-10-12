@@ -32,7 +32,7 @@ The original proposal specified five main inputs: **location**, **visual evidenc
 | Human-in-the-loop oversight | Streamlit interface supports incident review and status changes; it does **not** currently offer an interface to edit AI category, severity, or routing recommendations. |
 | Persist incident and dispatch | The system stores the incident and its recommended dispatch route locally; it does **not** automatically notify or dispatch a real maintenance or emergency team. |
 
-**Design distinction:** A validated Gemini assessment is essential to submitting a new report. A failed AI request stops the workflow without scoring or saving; when AI succeeds, the reporter reviews the priority summary and confirms or cancels. Only successful, confirmed reports are saved to JSON.
+**Design distinction:** A validated Gemini assessment is essential to submitting a new report. A failed AI request stops the workflow without scoring or saving; when AI succeeds, the reporter reviews the priority summary and confirms or cancels. Only successful, confirmed reports are saved to JSON. This safeguard applies to new submissions; historical records created before its implementation may contain offline fallback assessments.
 
 ## ✨ Features
 
@@ -358,7 +358,12 @@ In the Streamlit dashboard, facilities staff can view incidents sorted by score,
 
 `Data_Manager.delete_incident_by_id()` creates a timestamped `incidents_backup_*.json` snapshot **before** deleting an existing incident. `Data_Manager.clear_database()` likewise backs up the database before clearing **nonempty** incident records. If backup creation fails, the deletion or clearing is cancelled, keeping the current database intact. A maximum of **30 snapshots** is retained in the private `backups/` folder beside the database. Backups can include reporter details and must not be committed or shared.
 
-`Data_Manager.list_backups()` lists stored snapshots, and `Data_Manager.restore_backup()` can restore a selected snapshot **programmatically** after making a safety backup of the current database. The Streamlit dashboard does not currently offer a restore button. Hourly backup scheduling is not active; backups are triggered by deletion, nonempty database clearing and restoration safety protection, not routine status changes.
+`Data_Manager.list_backups()` lists stored snapshots, while `Data_Manager.restore_backup()` supports database recovery.
+The Streamlit dashboard provides a "Restore from backup" section that allows facilities personnel to restore the newest available
+backup after confirming the operation. The system creates a safety backup of the current database before restoration, if one exists.
+
+Older snapshots can be restored programmatically by specifying
+their file paths. Automatic hourly backups are not scheduled.
 
 `Data_Manager.py` also stores the last issued ID in `.incident_id_counter` beside the database. This file is not reset by incident deletion or clearing, so new records do not reuse IDs during normal single-writer operation. The counter is not part of the JSON incident snapshots; retain it when managing or restoring backups. The new tests cover ID non-reuse, clearing protection and restoration.
 

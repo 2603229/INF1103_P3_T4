@@ -55,14 +55,14 @@ Incident records, exports, private database backups and uploaded images are stor
 
 | Volume | Contents |
 | --- | --- |
-| `hazard-data` | `hazardreportdb.json`, CSV/TXT exports and private `backups/` snapshots |
+| `hazard-data` | `hazardreportdb.json`, `.incident_id_counter`, CSV/TXT exports and private `backups/` snapshots |
 | `hazard-uploads` | Attached hazard images |
 
 ### Database backup and recovery
 
 Before deleting an existing incident, `Data_Manager.py` creates a timestamped snapshot of the complete database under `/app/data/backups/`. If backup creation fails, deletion is cancelled. Up to 30 snapshots are kept. Backups persist in the `hazard-data` volume across container restarts.
 
-Restoring a snapshot is supported through `Data_Manager.restore_backup()` in Python code, but there is no dashboard restoration button. No hourly backup scheduler is active. Backups may contain reporter details; treat them as private data and never commit them to Git.
+Database restoration is supported through `Data_Manager.restore_backup()`. The Streamlit dashboard provides a **"Restore from backup"** feature that allows facilities personnel to restore the latest available backup after confirmation. Older backups can also be restored programmatically by specifying their file paths. No hourly backup scheduler is active. Backups may contain reporter details; treat them as private data and never commit them to Git.
 
 **Warning:** Removing `hazard-data` removes the active database **and all backups**. To delete all stored data and start fresh:
 
