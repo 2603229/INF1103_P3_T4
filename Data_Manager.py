@@ -433,12 +433,15 @@ def restore_backup(path: Optional[str] = None) -> bool:
         logger.error("No backup file to restore from.")
         return False
 
-    records = _read_list_file(source)
-
-    if records is None:
+    try:
+        records = read_json(source)
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError, ValueError) as error:
+        logger.error("Backup file could not be read: %s", error)
         return False
 
-    create_backup("before-restore")
+    if os.path.isfile(get_db_path()) and not create_backup("before-restore"):
+        logger.error("Current database could not be backed up; restore cancelled.")
+        return False
 
     return write_json(get_db_path(), records)
 
