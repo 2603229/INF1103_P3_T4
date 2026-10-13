@@ -214,7 +214,7 @@ Run the procedural offline tests inside the image:
 docker run --rm hazard-reporter python test_script.py
 ```
 
-**Verified Docker CI result (12 October 2026):** GitHub Actions [run #13](https://github.com/2603229/INF1103_P3_T4/actions/runs/38265579783), commit `0d257d0`, built the Docker image and passed **all 40 tests inside Docker**, with zero failures, errors or skips (AI: 14; Logic: 10; Data: 9; IO: 4; Main: 3). The same 40 tests passed in the Python CI step. Earlier interactive checks (11 October) verified the CLI, live Gemini assessment, recovery from HTTP 504, saving and persistence after restart. These CI results do not replace the required live team demonstration on the submission machine.
+**Verified Docker CI result (13 October 2026):** GitHub Actions [run #18](https://github.com/2603229/INF1103_P3_T4/actions/runs/38367739326), commit `4d6c114`, successfully built the Docker image and passed all 40 tests in both Python and Docker, with zero failures, errors or skips. The workflow also exported and uploaded the tested Docker image as a downloadable artifact.
 
 ### Recommended assessment demonstration
 
@@ -296,10 +296,10 @@ Gemini API calls are mocked in the automated tests, so no live API key is requir
 | Item | Verified result |
 | --- | --- |
 | Workflow | INF1103 Team 4 CI Pipeline |
-| Run | **#13** |
-| Date | **12 October 2026** |
+| Run | **#18** |
+| Date | **13 October 2026** |
 | Branch | `main` |
-| Commit | **`0d257d0`** |
+| Commit | **`4d6c114`** |
 | Status | **Success** |
 | Python automated tests | **40/40 passed** |
 | Docker automated tests | **40/40 passed** |
@@ -308,7 +308,7 @@ Gemini API calls are mocked in the automated tests, so no live API key is requir
 
 [View GitHub Actions runs](https://github.com/2603229/INF1103_P3_T4/actions).
 
-GitHub Actions run #13 verified the latest 40-test version on commit `0d257d0`. Earlier runs remain in the Actions history. This workflow provides **continuous integration** (automated checks and Docker image build), not automatic deployment to a production server.
+GitHub Actions run #18 verified all 40 automated tests in Python and Docker, successfully built and exported the Docker image, and uploaded it as a downloadable artifact. This workflow supports continuous integration and delivery of tested Docker images, but does not automatically deploy the application to a production server.
 
 ## 🤖 AI assessment and C2 failure handling
 
@@ -387,7 +387,7 @@ python test_script.py --details
 python test_script.py --no-data
 ```
 
-**Latest verified GitHub Actions run (12 October 2026, run #13, commit `0d257d0`):** All **40 tests passed both in the Python CI environment and inside Docker** (AI: 14; Logic: 10; Data: 9; IO: 4; Main: 3), with **zero failures, errors or skips**. The additional C2 test `test_ai_failure_prevents_submission()` checks that a failed Gemini assessment cannot create a saved incident. Other recent tests verify ID non-reuse, backup-before-clearing protection, database restoration and optional-image confirmation.
+**Latest verified GitHub Actions run (13 October 2026, run #18, commit `4d6c114`):** All 40 tests passed in both Python and Docker (AI: 14; Logic: 10; Data: 9; IO: 4; Main: 3), with zero failures, errors or skips. The Docker image was successfully built, exported and uploaded as a downloadable artifact. Tests also verify AI failure protection (C2), incident ID persistence, backup recovery and input validation.
 
 Gemini requests are mocked, so the automated tests do **not** require a live API key or network access. Database tests use temporary, isolated JSON storage. The CI checks do not prove the quality of real-world hazard classifications or the complete interactive Streamlit experience; those require a separate demonstration. For the C2 demonstration, start a test-only Docker container without `--env-file .env`, submit a sample hazard and verify that the application reports an AI error and creates no record.
 
