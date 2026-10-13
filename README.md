@@ -274,6 +274,8 @@ See [`DOCKER.md`](DOCKER.md) for build/run commands, evidence mounting, volumes,
 
 The project uses GitHub Actions for **continuous integration (CI)**. The workflow is defined in [`.github/workflows/ci.yml`](.github/workflows/ci.yml) and runs on pushes, pull requests, and manual dispatch.
 
+The GitHub Actions pipeline automatically verifies Python syntax, executes 40 tests, builds the Docker image, and repeats the tests inside Docker. On successful pushes to the main branch, the tested image is exported and uploaded as a downloadable artifact, supporting continuous delivery.
+
 ### CI pipeline
 
 The pipeline runs on **Ubuntu 24.04** with **Python 3.12** and automatically:
@@ -284,6 +286,8 @@ The pipeline runs on **Ubuntu 24.04** with **Python 3.12** and automatically:
 4. Runs the current **40 offline automated tests**.
 5. Builds the `hazard-reporter` Docker image.
 6. Runs the same **40 tests again inside Docker**.
+7. Exports the tested Docker image on successful pushes to `main`.
+8. Uploads the Docker image as a downloadable GitHub Actions artifact.
 
 Gemini API calls are mocked in the automated tests, so no live API key is required for CI.
 
