@@ -36,3 +36,16 @@ jobs:
 
       - name: Run Tests Inside Docker
         run: docker run --rm hazard-reporter python test_script.py
+
+      - name: Export Tested Docker Image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker save -o hazard-reporter.tar hazard-reporter
+
+      - name: Upload Docker Image Artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: hazard-reporter-image
+          path: hazard-reporter.tar
+          if-no-files-found: error
+          retention-days: 7
