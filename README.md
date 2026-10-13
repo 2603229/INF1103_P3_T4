@@ -8,7 +8,7 @@ A modular Python campus hazard reporting application that lets students and staf
 
 ## 🎯 Project background and initial objectives
 
-The original **Team 4 Project Initial Details** proposal identified a campus-safety problem: students and staff need a centralised way to report hazards such as electrical faults, leaks, and damaged facilities, while maintenance teams need structured information to prioritise cases and recognise recurring problems. This prototype focuses on turning those reports into records that can be assessed, prioritised, and reviewed.
+The **Team 4 Project Initial Details** proposal identified a campus-safety problem: students and staff need a centralised way to report hazards such as electrical faults, leaks, and damaged facilities, while maintenance teams need structured information to prioritise cases and recognise recurring problems. This prototype focuses on turning those reports into records that can be assessed, prioritised, and reviewed.
 
 ### 👥 Intended users
 
@@ -19,9 +19,9 @@ The original **Team 4 Project Initial Details** proposal identified a campus-saf
 
 ### 📝 Information collected
 
-The original proposal specified five main inputs: **location**, **visual evidence**, **number of people affected**, **asset information**, and an **unstructured hazard description**. The implemented CLI also collects reporter name and contact details. Visual evidence is optional in the current application.
+The proposal specified five main inputs: **location**, **visual evidence**, **number of people affected**, **asset information**, and an **unstructured hazard description**. The implemented CLI also collects reporter name and contact details. Visual evidence is optional in the current application.
 
-### 📌 Original goals and implementation status
+### 📌 Goals and implementation status
 
 | Proposed capability | Current implementation |
 | --- | --- |
@@ -80,8 +80,6 @@ Generated locally (keep private; ensure these are excluded from Git tracking):
 ├── hazard_reports.csv            # Generated CSV export
 └── hazard_reports.txt            # Generated TXT export
 ```
-
-`hazardreportdb.json` may initially be absent; Data Manager treats a missing database as empty and creates it when the first report is saved. A clean `[]` JSON database can be included separately in the school's ZIP submission. Do not publish real reporter details, incident images, API keys or export files containing personal information.
 
 ## 🔄 How the system works
 
@@ -142,35 +140,17 @@ The application processes a report in this order:
    cd INF1103_P3_T4
    ```
 
-2. (Recommended) Create and activate a virtual environment:
-
-   **Windows PowerShell:**
-
-   ```powershell
-   python -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   ```
-
-   **macOS/Linux:**
-
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-
-3. Install dependencies from the provided file:
+2. Install dependencies from the provided file:
 
    ```bash
    python -m pip install -r requirement.txt
    ```
 
-4. Create a local `.env` file in the project root:
+3. Create a local `.env` file in the project root:
 
    ```dotenv
    GEMINI_API_KEY=replace_with_your_gemini_api_key
    ```
-
-   Keep `.env` private. It is excluded by the supplied `.gitignore`. Never place a real API key in the README or a Git commit.
 
 ## ▶️ Running the application
 
